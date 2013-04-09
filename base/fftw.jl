@@ -789,39 +789,30 @@ for f in (:plan_r2r, :plan_r2r!)
     end
 end
 
-# FFTW-based transpose routines
-#   TODO: implement in-place transpose! routine (this is supported by FFTW)
-#   TODO: fftw/fftwf can transpose matrices of any type, provided that the
-#         element size is a multiple of sizeof(double) or sizeof(float).
-
+# Low-level transposition routine for matrix whose elements have a size
+# (in bytes) that is an integer multiple of sizeof(Float32) or sizeof(Float64).
+#
+# Computes Y = X.', where X points to an n1 by n2 array of contiguous n-tuples
+# of type elty, and Y points to an array of the same size (may == X),
+# s1 and s2 are the strides along dimensions n1 and n2 (should equal 1 and
+# n1, respectively, for in-place transposition).
 for (libname, fname, elty) in ((:libfftw ,"fftw_plan_guru64_r2r",:Float64),
                                (:libfftwf,"fftwf_plan_guru64_r2r",:Float32))
+
     @eval begin
-        function transpose(X::Matrix{$elty})
-            P = similar(X)
-            (n1, n2) = size(X)
+        function transpose(X::Ptr{$elty}, Y::Ptr{$elty},
+                           n1::Integer, n2::Integer, n::Int,
+                           s1::Integer, s2::Integer)
             plan = ccall(($fname,$libname), Ptr{Void},
                          (Int32, Ptr{Int}, Int32, Ptr{Int}, Ptr{$elty}, Ptr{$elty}, Ptr{Int32}, Uint32),
-                         0, C_NULL, 2, [n1,n2,1,n2,1,n1], X, P, [HC2R], ESTIMATE | PRESERVE_INPUT)
+                         0, C_NULL, 3, Int[n1,s1*n,n2*n, n2,s2*n,n, n,1,1],
+                         X, Y, C_NULL, ESTIMATE | PRESERVE_INPUT)
+            if plan == C_NULL
+                error("FFTW could not create plan") # shouldn't normally happen
+            end
             execute($elty, plan)
             destroy_plan($elty, plan)
-            return P
-        end
-    end
-end
-
-for (libname, fname, celty) in ((:libfftw ,"fftw_plan_guru64_dft",:Complex128),
-                                (:libfftwf,"fftwf_plan_guru64_dft",:Complex64))
-    @eval begin
-        function transpose(X::Matrix{$celty})
-            P = similar(X)
-            (n1, n2) = size(X)
-            plan = ccall(($fname,$libname), Ptr{Void},
-                         (Int32, Ptr{Int}, Int32, Ptr{Int}, Ptr{$celty}, Ptr{$celty}, Int32, Uint32),
-                         0, C_NULL, 2, [n1,n2,1,n2,1,n1], X, P, FORWARD, ESTIMATE | PRESERVE_INPUT)
-            execute($celty, plan)
-            destroy_plan($celty, plan)
-            return P
+            return Y
         end
     end
 end

@@ -623,6 +623,7 @@ export
     symmetrize!,
     trace,
     transpose,
+    transpose!,
     tril,
     triu,
     tril!,

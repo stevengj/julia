@@ -1466,22 +1466,71 @@ end
 
 ## Transpose ##
 
-function transpose{T<:Union(Float64,Float32,Complex128,Complex64)}(A::Matrix{T})
-    if length(A) > 50000
-        return FFTW.transpose(reshape(A, size(A, 2), size(A, 1)))
+function transpose{T}(A::StridedMatrix{T})
+    (n1, n2) = size(A)
+    # sizeof(T) does not work because A elements may be jl_value_t*
+    # FIXME: there should be a way to get elsize as a compile-time constant
+    elsize = div(sizeof(A), n1*n2)
+    if n1*n2 > 50000 && rem(elsize, 4) == 0
+        (s1, s2) = strides(A)
+        P = Array(T, n2, n1)
+        if rem(elsize, 8) == 0
+            FFTW.transpose(convert(Ptr{Float64}, A),
+                           convert(Ptr{Float64}, P),
+                           n1, n2, div(elsize, 8), s1, s2)
+        else
+            FFTW.transpose(convert(Ptr{Float32}, A),
+                           convert(Ptr{Float32}, P),
+                           n1, n2, div(elsize, 4), s1, s2)
+        end
+        return P
     else
-        return [ A[j,i] for i=1:size(A,2), j=1:size(A,1) ]
+        return [ A[j,i] for i=1:n2, j=1:n1 ]
     end
 end
 
 ctranspose{T<:Real}(A::StridedVecOrMat{T}) = transpose(A)
 ctranspose(x::StridedVecOrMat) = transpose(x)
 
-transpose(x::StridedVector) = [ x[j] for i=1, j=1:size(x,1) ]
-transpose(x::StridedMatrix) = [ x[j,i] for i=1:size(x,2), j=1:size(x,1) ]
+transpose(x::StridedVector) = reshape(copy(x), 1, length(x))
 
-ctranspose{T<:Number}(x::StridedVector{T}) = [ conj(x[j]) for i=1, j=1:size(x,1) ]
+ctranspose{T<:Number}(x::StridedVector{T}) = reshape(conj(x), 1, length(x))
 ctranspose{T<:Number}(x::StridedMatrix{T}) = [ conj(x[j,i]) for i=1:size(x,2), j=1:size(x,1) ]
+
+# in-place transposition
+function transpose!{T}(A::Matrix{T})
+    (n1, n2) = size(A)
+    # sizeof(T) does not work because A elements may be jl_value_t*
+    # FIXME: there should be a way to get elsize as a compile-time constant
+    elsize = div(sizeof(A), n1*n2)
+    if rem(elsize, 4) == 0
+        if rem(elsize, 8) == 0
+            FFTW.transpose(convert(Ptr{Float64}, A),
+                           convert(Ptr{Float64}, A),
+                           n1, n2, div(elsize, 8), 1, n1)
+        else
+            FFTW.transpose(convert(Ptr{Float32}, A),
+                           convert(Ptr{Float32}, A),
+                           n1, n2, div(elsize, 4), 1, n1)
+        end
+        return reshape(A, n2, n1)
+    elseif n1 == n2
+        for i = 1:n1-1
+            for j = i+1:n1
+                t = A[i,j]
+                A[i,j] = A[j,i]
+                A[j,i] = t
+            end
+        end
+        return A
+    else
+        P = transpose(A)
+        copy!(A, P)
+        return P
+    end
+end
+
+transpose!(x::Vector) = reshape(x, 1, length(x))
 
 # set-like operators for vectors
 # These are moderately efficient, preserve order, and remove dupes.
