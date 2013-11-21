@@ -356,7 +356,7 @@ function elementwise::
      1.31849  1.44364
      1.56107  1.68622
 
-Elementwise operators such as ``.+`` and ``.*`` perform broadcasting if necessary. There is also a ``broadcast!`` function to specify an explicit destination, and ``broadcast_getindex`` and ``broadcast_setindex!`` that broadcast the indices before indexing.
+Elementwise operators such as ``.+`` and ``.*`` perform broadcasting if necessary. There is also a ``broadcast!`` function to specify an explicit destination, and ``broadcast_getindex`` and ``broadcast_setindex!`` that broadcast the indices before indexing.  The `@vectorize_2arg` macro generates a broacasting version of the function when both arguments are arrays.
 
 Implementation
 --------------

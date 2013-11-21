@@ -49,3 +49,5 @@ for arr in (identity, as_sub)
     broadcast_setindex!(A, arr([21 11; 12 22]), eye(Int, 2)+1,arr([1, 2]))
     @test A == M
 end
+
+@test broadcast(atan2, [1.0, 2, 3], [4 5]) == atan2([1.0, 2, 3], [4 5])

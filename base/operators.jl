@@ -261,10 +261,8 @@ macro vectorize_2arg(S,f)
         ($f){$T1<:$S, $T2<:$S}(x::AbstractArray{$T1}, y::($T2)) =
             reshape([ ($f)(x[i], y) for i=1:length(x) ], size(x))
 
-        function ($f){$T1<:$S, $T2<:$S}(x::AbstractArray{$T1}, y::AbstractArray{$T2})
-            shp = promote_shape(size(x),size(y))
-            reshape([ ($f)(x[i], y[i]) for i=1:length(x) ], shp)
-        end
+        ($f){$T1<:$S, $T2<:$S}(x::AbstractArray{$T1}, y::AbstractArray{$T2}) =
+            broadcast($f, x, y)
     end
 end
 
