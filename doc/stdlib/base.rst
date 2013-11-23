@@ -15,7 +15,7 @@ Some general notes:
 Getting Around
 --------------
 
-.. function:: exit([code])
+.. function:: exit(code=0)
 
    Quit (or control-D at the prompt). The default exit code is zero, indicating that the processes completed successfully.
 
@@ -31,24 +31,24 @@ Getting Around
 
    Determine whether Julia is running an interactive session.
 
-.. function:: whos([Module,] [pattern::Regex])
+.. function:: whos(Module=current_module(), pattern::Regex=r"")
 
    Print information about global variables in a module, optionally restricted
    to those matching ``pattern``.
 
-.. function:: edit(file::String, [line])
+.. function:: edit(file::String, line=1)
 
    Edit a file optionally providing a line number to edit at. Returns to the julia prompt when you quit the editor.
 
-.. function:: edit(function, [types])
+.. function:: edit(function), edit(function, types)
 
    Edit the definition of a function, optionally specifying a tuple of types to indicate which method to edit.
 
-.. function:: less(file::String, [line])
+.. function:: less(file::String, line=1)
 
    Show a file using the default pager, optionally providing a starting line number. Returns to the julia prompt when you quit the pager.
 
-.. function:: less(function, [types])
+.. function:: less(function), less(function, types)
 
    Show the definition of a function using the default pager, optionally specifying a tuple of types to indicate which method to see.
 
@@ -96,7 +96,7 @@ Getting Around
 
    Show all methods of ``f`` with their argument types.
 
-.. function:: methodswith(typ[, showparents])
+.. function:: methodswith(typ, showparents=false)
 
    Show all methods with an argument of type ``typ``. If optional
    ``showparents`` is ``true``, also show arguments with a parent type
@@ -106,7 +106,7 @@ Getting Around
 
    Show an expression and result, returning the result
 
-.. function:: versioninfo([verbose::Bool])
+.. function:: versioninfo(verbose::Bool=false)
 
    Print information about the version of Julia in use. If the ``verbose`` argument
    is true, detailed system information is shown as well.
@@ -251,7 +251,7 @@ Types
 
    Size, in bytes, of the canonical binary representation of the given type, if any.
 
-.. function:: eps([type])
+.. function:: eps(type=Float64)
 
    The distance between 1.0 and the next larger representable floating-point value of ``type``. The only types that are sensible arguments are ``Float32`` and ``Float64``. If ``type`` is omitted, then ``eps(Float64)`` is returned.
 
@@ -358,15 +358,17 @@ Syntax
    Only valid in the context of an Expr returned from a macro. Prevents the macro hygine pass from turning embedded variables into gensym variables. See the :ref:`man-macros`
    section of the Metaprogramming chapter of the manual for more details and examples.
 
-.. function:: gensym([tag])
+.. function:: gensym(), gensym(tag)
 
-   Generates a symbol which will not conflict with other variable names.
+   Generates a symbol which will not conflict with other variable names;
+   you may optionally pass a ``tag`` string to be embedded in the symbol
+   for human-identification purposes.
 
 .. function:: @gensym
 
    Generates a gensym symbol for a variable. For example, `@gensym x y` is transformed into `x = gensym("x"); y = gensym("y")`.
 
-.. function:: parse(str, [start]; greedy=true, raise=false)
+.. function:: parse(str, start=1; greedy=true, raise=false)
 
    Parse the expression string and return an expression (which could later be passed to eval for execution). Start is the index of the first character to start parsing (default is 1). If greedy is true (default), parse will try to consume as much input as it can; otherwise, it will stop as soon as it has parsed a valid token. If raise is true (default), parse errors will raise an error; otherwise, parse will return the error as an expression object.
 
@@ -666,7 +668,7 @@ Given a dictionary ``D``, the syntax ``D[x]`` returns the value of key ``x`` (if
 
    Delete the mapping for the given key in a collection, and return the colection.
 
-.. function:: pop!(collection, key[, default])
+.. function:: pop!(collection, key, default=<throw error>)
 
    Delete and return the mapping for ``key`` if it exists in ``collection``, otherwise return ``default``, or throw an error if default is not specified.
 
@@ -890,15 +892,15 @@ Strings
 
    Test whether a string contains a match of the given regular expression.
 
-.. function:: match(r::Regex, s::String[, idx::Integer[, addopts]])
+.. function:: match(r::Regex, s::String, idx=1, addopts=0)
 
    Search for the first match of the regular expression ``r`` in ``s`` and return a RegexMatch object containing the match, or nothing if the match failed. The matching substring can be retrieved by accessing ``m.match`` and the captured sequences can be retrieved by accessing ``m.captures``
 
-.. function:: eachmatch(r::Regex, s::String[, overlap::Bool=false])
+.. function:: eachmatch(r::Regex, s::String, overlap=false)
 
    Search for all matches of a the regular expression ``r`` in ``s`` and return a iterator over the matches. If overlap is true, the matching sequences are allowed to overlap indices in the original string, otherwise they must be from distinct character ranges.
 
-.. function:: matchall(r::Regex, s::String[, overlap::Bool=false]) -> Vector{String}
+.. function:: matchall(r::Regex, s::String, overlap=false) -> Vector{String}
 
    Return a vector of the matching substrings from eachmatch.
 
@@ -934,27 +936,27 @@ Strings
 
    Determine whether the second argument is a substring of the first.
 
-.. function:: replace(string, pat, r[, n])
+.. function:: replace(string, pat, r, n=<no limit>)
 
    Search for the given pattern ``pat``, and replace each occurrence with ``r``. If ``n`` is provided, replace at most ``n`` occurrences.  As with search, the second argument may be a single character, a vector or a set of characters, a string, or a regular expression. If ``r`` is a function, each occurrence is replaced with ``r(s)`` where ``s`` is the matched substring.
 
-.. function:: split(string, [chars, [limit,] [include_empty]])
+.. function:: split(string, chars=<whitespace>, limit=<no limit>, include_empty=false)
 
    Return an array of strings by splitting the given string on occurrences of the given character delimiters, which may be specified in any of the formats allowed by ``search``'s second argument (i.e. a single character, collection of characters, string, or regular expression). If ``chars`` is omitted, it defaults to the set of all space characters, and ``include_empty`` is taken to be false. The last two arguments are also optional: they are are a maximum size for the result and a flag determining whether empty fields should be included in the result.
 
-.. function:: rsplit(string, [chars, [limit,] [include_empty]])
+.. function:: rsplit(string, chars=<whitespace>, limit=<no limit>, include_empty=false)
 
    Similar to ``split``, but starting from the end of the string.
 
-.. function:: strip(string, [chars])
+.. function:: strip(string, chars=<whitespace>)
 
    Return ``string`` with any leading and trailing whitespace removed. If a string ``chars`` is provided, instead remove characters contained in that string.
 
-.. function:: lstrip(string, [chars])
+.. function:: lstrip(string, chars=<whitespace>)
 
    Return ``string`` with any leading whitespace removed. If a string ``chars`` is provided, instead remove characters contained in that string.
 
-.. function:: rstrip(string, [chars])
+.. function:: rstrip(string, chars=<whitespace>)
 
    Return ``string`` with any trailing whitespace removed. If a string ``chars`` is provided, instead remove characters contained in that string.
 
@@ -1157,7 +1159,7 @@ I/O
 
    Create a read-only IOBuffer on the data underlying the given string
 
-.. function:: IOBuffer([data,],[readable,writable,[maxsize]])
+.. function:: IOBuffer(data=[], readable=true, writable=false, maxsize=typemax(Int))
 
    Create an IOBuffer, which may optionally operate on a pre-existing array. If the readable/writable arguments are given, 
    they restrict whether or not the buffer may be read from or written to respectively. By default the buffer is readable
@@ -1171,7 +1173,7 @@ I/O
 
    Obtain the contents of an ``IOBuffer`` as a string, without copying.
 
-.. function:: fdio([name::String, ]fd::Integer[, own::Bool]) -> IOStream
+.. function:: fdio(fd::Integer, own=false), fd(name::String, fd, own=false) -> IOStream
 
    Create an ``IOStream`` object from an integer file descriptor. If ``own`` is true, closing this object will close the underlying descriptor. By default, an ``IOStream`` is closed when it is garbage collected. ``name`` allows you to associate the descriptor with a named file.
 
@@ -1314,16 +1316,16 @@ I/O
    wr end is given for convenience in case the old STDOUT object was cached by the user and needs to be
    replaced elsewhere. 
 
-.. function:: redirect_stdout(stream)
+.. function:: redirect_stdout(), redirect_stdout(stream)
 
-   Replace STDOUT by stream for all C and julia level output to STDOUT. Note that `stream` must be a TTY, a Pipe or a
+   Replace STDOUT by a new ``Pipe`` stream, or the given ``stream`` parameter, for all C and julia level output to STDOUT. Note that `stream` must be a TTY, a Pipe or a
    TcpSocket.
 
-.. function:: redirect_stderr([stream])
+.. function:: redirect_stderr(), redirect_stderr(stream)
 
    Like redirect_stdout, but for STDERR
 
-.. function:: redirect_stdin([stream])
+.. function:: redirect_stdin(), redirect_stdin(stream)
 
    Like redirect_stdout, but for STDIN. Note that the order of the return tuple is still (rd,wr), i.e. data to be read
    from STDIN, may be written to wr.
@@ -1332,7 +1334,7 @@ I/O
 
    Read the entirety of x as a string but remove trailing newlines. Equivalent to chomp(readall(x)).
 
-.. function:: readdir([dir]) -> Vector{ByteString}
+.. function:: readdir(dir=".") -> Vector{ByteString}
 
    Returns the files and directories in the directory `dir` (or the current working directory if not given).
 
@@ -1450,17 +1452,17 @@ I/O
 Network I/O
 -----------
 
-.. function:: connect([host],port) -> TcpSocket
+.. function:: connect(host,port), connect(port) -> TcpSocket
 
-   Connect to the host ``host`` on port ``port``
+   Connect to the host ``host`` (defaults to localhost)  on port ``port``
 
 .. function:: connect(path) -> Pipe
 
    Connect to the Named Pipe/Domain Socket at ``path``
 
-.. function:: listen([addr,]port) -> TcpServer
+.. function:: listen(addr, port), listen(port) -> TcpServer
 
-   Listen on port on the address specified by ``addr``. By default this listens on localhost only.
+   Listen on port on the address specified by ``addr`` (defaults to localhost).
    To listen on all interfaces pass, ``IPv4(0)`` or ``IPv6(0)`` as appropriate.
 
 .. function:: listen(path) -> PipeServer
@@ -1487,7 +1489,7 @@ Network I/O
 
    Returns the number of bytes available for reading before a read from this stream or buffer will block.
 
-.. function:: accept(server[,client])
+.. function:: accept(server, client=<new stream>)
 
    Accepts a connection on the given server and returns a connection to the client. An uninitialized client 
    stream may be provided, in which case it will be used instead of creating a new stream.
@@ -1558,9 +1560,9 @@ Text I/O
 
    Display a warning.
 
-.. function:: @printf([io::IOStream], "%Fmt", args...)
+.. function:: @printf(io::IOStream, "%Fmt", args...), @printf("%Fmt", args...)
 
-   Print arg(s) using C ``printf()`` style format specification string. Optionally, an IOStream may be passed as the first argument to redirect output.
+   Print arg(s) using C ``printf()`` style format specification string. Optionally, an IOStream may be passed as the first argument to redirect output (defaults to ``STDOUT``).
 
 .. function:: @sprintf("%Fmt", args...)
 
@@ -1818,7 +1820,7 @@ stack with:
 Memory-mapped I/O
 -----------------
 
-.. function:: mmap_array(type, dims, stream, [offset])
+.. function:: mmap_array(type, dims, stream, offset=position(s))
 
    Create an ``Array`` whose values are linked to a file, using memory-mapping. This provides a convenient way of working with data too large to fit in the computer's memory.
 
@@ -1853,9 +1855,9 @@ Memory-mapped I/O
    
    A more portable file would need to encode the word size---32 bit or 64 bit---and endianness information in the header. In practice, consider encoding binary data using standard formats like HDF5 (which can be used with memory-mapping).
 
-.. function:: mmap_bitarray([type,] dims, stream, [offset])
+.. function:: mmap_bitarray(dims, stream, offset=position(stream))
 
-   Create a ``BitArray`` whose values are linked to a file, using memory-mapping; it has the same purpose, works in the same way, and has the same arguments, as :func:`mmap_array`, but the byte representation is different. The ``type`` parameter is optional, and must be ``Bool`` if given.
+   Create a ``BitArray`` whose values are linked to a file, using memory-mapping; it has the same purpose, works in the same way, and has the same arguments, as :func:`mmap_array`, but the byte representation is different.
 
    **Example**:  ``B = mmap_bitarray((25,30000), s)``
 
@@ -2003,9 +2005,9 @@ Mathematical Operators
 
    Rational division
 
-.. function:: rationalize([Type,] x)
+.. function:: rationalize(type,x), rationalize(x)
 
-   Approximate the number x as a rational fraction
+   Approximate the number x as a rational fraction of the given type (defaults to ``Int``).
 
 .. function:: num(x)
 
@@ -2031,14 +2033,14 @@ Mathematical Operators
    Unsigned right shift operator.
 
 .. _\::
-.. function:: \:(start, [step], stop)
+.. function:: \:(start, stop), \:(start, step, stop)
 
    Range operator. ``a:b`` constructs a range from ``a`` to ``b`` with a step size of 1,
    and ``a:s:b`` is similar but uses a step size of ``s``. These syntaxes call the
    function ``colon``.
    The colon is also used in indexing to select whole dimensions.
 
-.. function:: colon(start, [step], stop)
+.. function:: colon(start, stop), colon(start, step, stop)
 
    Called by ``:`` syntax for constructing ranges.
 
@@ -2475,19 +2477,19 @@ Mathematical Functions
 
    Accurately compute :math:`e^x-1`
 
-.. function:: round(x, [digits, [base]])
+.. function:: round(x, digits=0, base=10)
 
    ``round(x)`` returns the nearest integral value of the same type as ``x`` to ``x``. ``round(x, digits)`` rounds to the specified number of digits after the decimal place, or before if negative, e.g., ``round(pi,2)`` is ``3.14``. ``round(x, digits, base)`` rounds using a different base, defaulting to 10, e.g., ``round(pi, 3, 2)`` is ``3.125``.
 
-.. function:: ceil(x, [digits, [base]])
+.. function:: ceil(x, digits=0, base=10)
 
    Returns the nearest integral value of the same type as ``x`` not less than ``x``. ``digits`` and ``base`` work as above.
 
-.. function:: floor(x, [digits, [base]])
+.. function:: floor(x, digits=0, base=10)
 
    Returns the nearest integral value of the same type as ``x`` not greater than ``x``. ``digits`` and ``base`` work as above.
 
-.. function:: trunc(x, [digits, [base]])
+.. function:: trunc(x, digits=0, base=10)
 
    Returns the nearest integral value of the same type as ``x`` not greater in magnitude than ``x``. ``digits`` and ``base`` work as above.
 
@@ -2507,7 +2509,7 @@ Mathematical Functions
 
    Returns the nearest integer not greater in magnitude than ``x``.
 
-.. function:: signif(x, digits, [base])
+.. function:: signif(x, digits, base=10)
 
    Rounds (in the sense of ``round``) ``x`` so that there are ``digits`` significant digits, under a base ``base`` representation, default 10. E.g., ``signif(123.456, 2)`` is ``120.0``, and ``signif(357.913, 4, 2)`` is ``352.0``.
 
@@ -2816,27 +2818,27 @@ Mathematical Functions
 Data Formats
 ------------
 
-.. function:: bin(n, [pad])
+.. function:: bin(n, pad=0)
 
    Convert an integer to a binary string, optionally specifying a number of digits to pad to.
 
-.. function:: hex(n, [pad])
+.. function:: hex(n, pad=0)
 
    Convert an integer to a hexadecimal string, optionally specifying a number of digits to pad to.
 
-.. function:: dec(n, [pad])
+.. function:: dec(n, pad=0)
 
    Convert an integer to a decimal string, optionally specifying a number of digits to pad to.
 
-.. function:: oct(n, [pad])
+.. function:: oct(n, pad=0)
 
    Convert an integer to an octal string, optionally specifying a number of digits to pad to.
 
-.. function:: base(base, n, [pad])
+.. function:: base(base, n, pad=0)
 
    Convert an integer to a string in the given base, optionally specifying a number of digits to pad to. The base can be specified as either an integer, or as a ``Uint8`` array of character values to use as digit symbols.
 
-.. function:: digits(n, [base], [pad])
+.. function:: digits(n, base=10, pad=0)
 
    Returns an array of the digits of ``n`` in the given base, optionally padded with
    zeros to a specified size. More significant digits are at higher indexes, such
@@ -2846,13 +2848,13 @@ Data Formats
 
    A string giving the literal bit representation of a number.
 
-.. function:: parseint([type], str, [base])
+.. function:: parseint(str, base=10), parseint(type, str, base=10)
 
    Parse a string as an integer in the given base (default 10), yielding a number of the specified type (default ``Int``).
 
-.. function:: parsefloat([type], str)
+.. function:: parsefloat(str), parsefloat(type, str)
 
-   Parse a string as a decimal floating point number, yielding a number of the specified type.
+   Parse a string as a decimal floating point number, yielding a number of the specified type (default ``Float64``).
 
 .. function:: big(x)
 
@@ -3221,11 +3223,11 @@ Random Numbers
 
 Random number generateion in Julia uses the `Mersenne Twister library <http://www.math.sci.hiroshima-u.ac.jp/~m-mat/MT/SFMT/#dSFMT>`_. Julia has a global RNG, which is used by default. Multiple RNGs can be plugged in using the ``AbstractRNG`` object, which can then be used to have multiple streams of random numbers. Currently, only ``MersenneTwister`` is supported.
 
-.. function:: srand([rng], seed)
+.. function:: srand(seed), srand(rng, seed)
 
    Seed the RNG with a ``seed``, which may be an unsigned integer or a vector of unsigned integers. ``seed`` can even be a filename, in which case the seed is read from a file. If the argument ``rng`` is not provided, the default global RNG is seeded.
 
-.. function:: MersenneTwister([seed])
+.. function:: MersenneTwister(seed=0)
 
    Create a ``MersenneTwister`` RNG object. Different RNG objects can have their own seeds, which may be useful for generating different streams of random numbers.
 
@@ -3233,7 +3235,7 @@ Random number generateion in Julia uses the `Mersenne Twister library <http://ww
 
    Generate a ``Float64`` random number uniformly in [0,1)
 
-.. function:: rand!([rng], A)
+.. function:: rand!(A), rand!(rng, A)
 
    Populate the array A with random number generated from the specified RNG.
 
@@ -3570,27 +3572,27 @@ Indexing, Assignment, and Concatenation
 Array functions
 ~~~~~~~~~~~~~~~
 
-.. function:: cumprod(A, [dim])
+.. function:: cumprod(A, dim=1)
 
    Cumulative product along a dimension.
 
-.. function:: cumsum(A, [dim])
+.. function:: cumsum(A, dim=1)
 
    Cumulative sum along a dimension.
 
-.. function:: cumsum_kbn(A, [dim])
+.. function:: cumsum_kbn(A, dim=1)
 
    Cumulative sum along a dimension, using the Kahan-Babuska-Neumaier compensated summation algorithm for additional accuracy.
 
-.. function:: cummin(A, [dim])
+.. function:: cummin(A, dim=1)
 
    Cumulative minimum along a dimension.
 
-.. function:: cummax(A, [dim])
+.. function:: cummax(A, dim=1)
 
    Cumulative maximum along a dimension.
 
-.. function:: diff(A, [dim])
+.. function:: diff(A, dim=1)
 
    Finite difference operator of matrix or vector.
 
@@ -3716,11 +3718,11 @@ Combinatorics
 
    In-place version of :func:`shuffle`.
 
-.. function:: reverse(v [, start=1 [, stop=length(v) ]] )
+.. function:: reverse(v, start=1, stop=length(v))
 
    Return a copy of ``v`` reversed from start to stop.
 
-.. function:: reverse!(v [, start=1 [, stop=length(v) ]]) -> v
+.. function:: reverse!(v, start=1, stop=length(v)) -> v
 
    In-place version of :func:`reverse`.
 
@@ -3766,16 +3768,16 @@ Combinatorics
 Statistics
 ----------
 
-.. function:: mean(v[, region])
+.. function:: mean(v), mean(v, region)
 
-   Compute the mean of whole array ``v``, or optionally along the dimensions in ``region``.
+   Compute the mean of whole array ``v``, or optionally along the dimensions in ``region``; the former returns a scalar, and the latter returns a multidimensional array of the same dimensionality as ``v`` but with size 1 along the averaged dimensions.
    Note: Julia does not ignore ``NaN`` values in the computation.
    For applications requiring the handling of missing data, the ``DataArray``
    package is recommended.
 
-.. function:: std(v[, region])
+.. function:: std(v), std(v, region)
 
-   Compute the sample standard deviation of a vector or array ``v``, optionally along dimensions in ``region``. The algorithm returns an estimator of the generative distribution's standard deviation under the assumption that each entry of ``v`` is an IID drawn from that generative distribution. This computation is equivalent to calculating ``sqrt(sum((v - mean(v)).^2) / (length(v) - 1))``.
+   Similar to ``mean``, compute the sample standard deviation of a vector or array ``v``, optionally along dimensions in ``region``. The algorithm returns an estimator of the generative distribution's standard deviation under the assumption that each entry of ``v`` is an IID drawn from that generative distribution. This computation is equivalent to calculating ``sqrt(sum((v - mean(v)).^2) / (length(v) - 1))``.
    Note: Julia does not ignore ``NaN`` values in the computation.
    For applications requiring the handling of missing data, the ``DataArray``
    package is recommended.
@@ -3785,9 +3787,9 @@ Statistics
    Compute the sample standard deviation of a vector ``v`` with known mean ``m``.
    Note: Julia does not ignore ``NaN`` values in the computation.
 
-.. function:: var(v[, region])
+.. function:: var(v), var(v, region)
 
-   Compute the sample variance of a vector or array ``v``, optionally along dimensions in ``region``. The algorithm will return an estimator of the generative distribution's variance under the assumption that each entry of ``v`` is an IID drawn from that generative distribution. This computation is equivalent to calculating ``sum((v - mean(v)).^2) / (length(v) - 1)``.
+   Similar to ``mean``, compute the sample variance of a vector or array ``v``, optionally along dimensions in ``region``. The algorithm will return an estimator of the generative distribution's variance under the assumption that each entry of ``v`` is an IID drawn from that generative distribution. This computation is equivalent to calculating ``sum((v - mean(v)).^2) / (length(v) - 1)``.
    Note: Julia does not ignore ``NaN`` values in the computation.
    For applications requiring the handling of missing data, the ``DataArray``
    package is recommended.
@@ -3809,7 +3811,7 @@ Statistics
 
    Like ``median``, but may overwrite the input vector.
 
-.. function:: hist(v[, n]) -> e, counts
+.. function:: hist(v, n=length(v)) -> e, counts
 
    Compute the histogram of ``v``, optionally using approximately ``n``
    bins. The return values are a range ``e``, which correspond to the
@@ -3861,14 +3863,14 @@ Statistics
 
    Like ``quantile``, but overwrites the input vector.
 
-.. function:: cov(v1[, v2])
+.. function:: cov(v1), cov(v1, v2)
 
    Compute the Pearson covariance between two vectors ``v1`` and ``v2``. If
    called with a single element ``v``, then computes covariance of columns of
    ``v``.
    Note: Julia does not ignore ``NaN`` values in the computation.
 
-.. function:: cor(v1[, v2])
+.. function:: cor(v1), cov(v1, v2)
 
    Compute the Pearson correlation between two vectors ``v1`` and ``v2``. If
    called with a single element ``v``, then computes correlation of columns of
@@ -3880,7 +3882,7 @@ Signal Processing
 
 FFT functions in Julia are largely implemented by calling functions from `FFTW <http://www.fftw.org>`_
 
-.. function:: fft(A [, dims])
+.. function:: fft(A, dims=1:ndims(A))
 
    Performs a multidimensional FFT of the array ``A``.  The optional ``dims``
    argument specifies an iterable subset of dimensions (e.g. an integer,
@@ -3893,12 +3895,12 @@ FFT functions in Julia are largely implemented by calling functions from `FFTW <
    transform (DFT) as defined by :math:`\operatorname{DFT}[k] = \sum_{n=1}^{\operatorname{length}(A)} \exp\left(-i\frac{2\pi (n-1)(k-1)}{\operatorname{length}(A)} \right) A[n]`.  A multidimensional FFT simply performs this operation
    along each transformed dimension of ``A``.
 
-.. function:: fft!(A [, dims])
+.. function:: fft!(A, dims=1:ndims(A))
 
    Same as :func:`fft`, but operates in-place on ``A``,
    which must be an array of complex floating-point numbers.
 
-.. function:: ifft(A [, dims])
+.. function:: ifft(A, dims=1:ndims(A))
 
    Multidimensional inverse FFT.
 
@@ -3910,11 +3912,11 @@ FFT functions in Julia are largely implemented by calling functions from `FFTW <
    each transformed dimension of ``A``.  The inverse FFT computes
    the same thing divided by the product of the transformed dimensions.
 
-.. function:: ifft!(A [, dims])
+.. function:: ifft!(A, dims=1:ndims(A))
 
    Same as :func:`ifft`, but operates in-place on ``A``.
 
-.. function:: bfft(A [, dims])
+.. function:: bfft(A, dims=1:ndims(A))
 
    Similar to :func:`ifft`, but computes an unnormalized inverse
    (backward) transform, which must be divided by the product of the sizes
@@ -3923,11 +3925,11 @@ FFT functions in Julia are largely implemented by calling functions from `FFTW <
    step, which in some applications can be combined with other
    computational steps elsewhere.)
 
-.. function:: bfft!(A [, dims])
+.. function:: bfft!(A, dims=1:ndims(A))
 
    Same as :func:`bfft`, but operates in-place on ``A``.
 
-.. function:: plan_fft(A [, dims [, flags [, timelimit]]])
+.. function:: plan_fft(A, dims=1:ndims(A), flags=FFTW.ESTIMATE, timelimit=<none>)
 
    Pre-plan an optimized FFT along given dimensions (``dims``) of arrays
    matching the shape and type of ``A``.  (The first two arguments have
@@ -3949,29 +3951,29 @@ FFT functions in Julia are largely implemented by calling functions from `FFTW <
    are similar but produce plans that perform the equivalent of
    the inverse transforms :func:`ifft` and so on.
 
-.. function:: plan_ifft(A [, dims [, flags [, timelimit]]])
+.. function:: plan_ifft(A, dims=1:ndims(A), flags=FFTW.ESTIMATE, timelimit=<none>)
 
    Same as :func:`plan_fft`, but produces a plan that performs inverse transforms
    :func:`ifft`.
 
-.. function:: plan_bfft(A [, dims [, flags [, timelimit]]])
+.. function:: plan_bfft(A, dims=1:ndims(A), flags=FFTW.ESTIMATE, timelimit=<none>)
 
    Same as :func:`plan_fft`, but produces a plan that performs an unnormalized
    backwards transform :func:`bfft`.
 
-.. function:: plan_fft!(A [, dims [, flags [, timelimit]]])
+.. function:: plan_fft!(A, dims=1:ndims(A), flags=FFTW.ESTIMATE, timelimit=<none>)
 
    Same as :func:`plan_fft`, but operates in-place on ``A``.
 
-.. function:: plan_ifft!(A [, dims [, flags [, timelimit]]])
+.. function:: plan_ifft!(A, dims=1:ndims(A), flags=FFTW.ESTIMATE, timelimit=<none>)
 
    Same as :func:`plan_ifft`, but operates in-place on ``A``.
 
-.. function:: plan_bfft!(A [, dims [, flags [, timelimit]]])
+.. function:: plan_bfft!(A, dims=1:ndims(A), flags=FFTW.ESTIMATE, timelimit=<none>)
 
    Same as :func:`plan_bfft`, but operates in-place on ``A``.
 
-.. function:: rfft(A [, dims])
+.. function:: rfft(A, dims=1:ndims(A))
 
    Multidimensional FFT of a real array A, exploiting the fact that
    the transform has conjugate symmetry in order to save roughly half
@@ -3984,7 +3986,7 @@ FFT functions in Julia are largely implemented by calling functions from `FFTW <
    of (roughly) halving the first dimension of ``A`` in the result, the
    ``dims[1]`` dimension is (roughly) halved in the same way.
 
-.. function:: irfft(A, d [, dims])
+.. function:: irfft(A, d, dims=1:ndims(A))
 
    Inverse of :func:`rfft`: for a complex array ``A``, gives the
    corresponding real array whose FFT yields ``A`` in the first half.
@@ -3996,34 +3998,34 @@ FFT functions in Julia are largely implemented by calling functions from `FFTW <
    (This parameter cannot be inferred from ``size(A)`` due to the
    possibility of rounding by the ``floor`` function here.)
 
-.. function:: brfft(A, d [, dims])
+.. function:: brfft(A, d, dims=1:ndims(A))
 
    Similar to :func:`irfft` but computes an unnormalized inverse transform
    (similar to :func:`bfft`), which must be divided by the product
    of the sizes of the transformed dimensions (of the real output array)
    in order to obtain the inverse transform.
 
-.. function:: plan_rfft(A [, dims [, flags [, timelimit]]])
+.. function:: plan_rfft(A, dims=1:ndims(A), flags=FFTW.ESTIMATE, timelimit=<none>)
 
    Pre-plan an optimized real-input FFT, similar to :func:`plan_fft`
    except for :func:`rfft` instead of :func:`fft`.  The first two
    arguments, and the size of the transformed result, are the same as
    for :func:`rfft`.
 
-.. function:: plan_brfft(A, d [, dims [, flags [, timelimit]]])
+.. function:: plan_brfft(A, d, dims=1:ndims(A), flags=FFTW.ESTIMATE, timelimit=<none>)
 
    Pre-plan an optimized real-input unnormalized transform, similar to
    :func:`plan_rfft` except for :func:`brfft` instead of :func:`rfft`.
    The first two arguments and the size of the transformed result, are
    the same as for :func:`brfft`.
 
-.. function:: plan_irfft(A, d [, dims [, flags [, timelimit]]])
+.. function:: plan_irfft(A, d, dims=1:ndims(A), flags=FFTW.ESTIMATE, timelimit=<none>)
 
    Pre-plan an optimized inverse real-input FFT, similar to :func:`plan_rfft`
    except for :func:`irfft` and :func:`brfft`, respectively.  The first
    three arguments have the same meaning as for :func:`irfft`.
 
-.. function:: dct(A [, dims])
+.. function:: dct(A, dims=1:ndims(A))
 
    Performs a multidimensional type-II discrete cosine transform (DCT)
    of the array ``A``, using the unitary normalization of the DCT.
@@ -4033,13 +4035,13 @@ FFT functions in Julia are largely implemented by calling functions from `FFTW <
    dimensions is a product of small primes; see :func:`nextprod`.  See
    also :func:`plan_dct` for even greater efficiency.
 
-.. function:: dct!(A [, dims])
+.. function:: dct!(A, dims=1:ndims(A))
 
    Same as :func:`dct!`, except that it operates in-place
    on ``A``, which must be an array of real or complex floating-point
    values.
 
-.. function:: idct(A [, dims])
+.. function:: idct(A, dims=1:ndims(A))
 
    Computes the multidimensional inverse discrete cosine transform (DCT)
    of the array ``A`` (technically, a type-III DCT with the unitary
@@ -4050,27 +4052,27 @@ FFT functions in Julia are largely implemented by calling functions from `FFTW <
    dimensions is a product of small primes; see :func:`nextprod`.  See
    also :func:`plan_idct` for even greater efficiency.
 
-.. function:: idct!(A [, dims])
+.. function:: idct!(A, dims=1:ndims(A))
 
    Same as :func:`idct!`, but operates in-place on ``A``.
 
-.. function:: plan_dct(A [, dims [, flags [, timelimit]]])
+.. function:: plan_dct(A, dims=1:ndims(A), flags=FFTW.ESTIMATE, timelimit=<none>)
 
    Pre-plan an optimized discrete cosine transform (DCT), similar to
    :func:`plan_fft` except producing a function that computes :func:`dct`.
    The first two arguments have the same meaning as for :func:`dct`.
 
-.. function:: plan_dct!(A [, dims [, flags [, timelimit]]])
+.. function:: plan_dct!(A, dims=1:ndims(A), flags=FFTW.ESTIMATE, timelimit=<none>)
 
    Same as :func:`plan_dct`, but operates in-place on ``A``.
 
-.. function:: plan_idct(A [, dims [, flags [, timelimit]]])
+.. function:: plan_idct(A, dims=1:ndims(A), flags=FFTW.ESTIMATE, timelimit=<none>)
 
    Pre-plan an optimized inverse discrete cosine transform (DCT), similar to
    :func:`plan_fft` except producing a function that computes :func:`idct`.
    The first two arguments have the same meaning as for :func:`idct`.
 
-.. function:: plan_idct!(A [, dims [, flags [, timelimit]]])
+.. function:: plan_idct!(A, dims=1:ndims(A), flags=FFTW.ESTIMATE, timelimit=<none>)
 
    Same as :func:`plan_idct`, but operates in-place on ``A``.
 
@@ -4078,11 +4080,12 @@ FFT functions in Julia are largely implemented by calling functions from `FFTW <
 
    Swap the first and second halves of each dimension of ``x``.
 
-.. function:: fftshift(x,dim)
+.. function:: fftshift(x), fftshift(x,dim)
 
-   Swap the first and second halves of the given dimension of array ``x``.
+   Swap the first and second halves of the given dimension of array ``x``, or
+   along all the dimensions if none are specified
 
-.. function:: ifftshift(x, [dim])
+.. function:: ifftshift(x), ifftshift(x,dim)
 
    Undoes the effect of ``fftshift``.
 
@@ -4115,7 +4118,7 @@ The following functions are defined within the ``Base.FFTW`` module.
 
 .. currentmodule:: Base.FFTW
 
-.. function:: r2r(A, kind [, dims])
+.. function:: r2r(A, kind, dims=1:ndims(A))
 
    Performs a multidimensional real-input/real-output (r2r) transform
    of type ``kind`` of the array ``A``, as defined in the FFTW manual.
@@ -4138,18 +4141,18 @@ The following functions are defined within the ``Base.FFTW`` module.
 
    See also :func:`plan_r2r` to pre-plan optimized r2r transforms.
 
-.. function:: r2r!(A, kind [, dims])
+.. function:: r2r!(A, kind, dims=1:ndims(A))
 
    Same as :func:`r2r`, but operates in-place on ``A``, which must be
    an array of real or complex floating-point numbers.
 
-.. function:: plan_r2r(A, kind [, dims [, flags [, timelimit]]])
+.. function:: plan_r2r(A, kind, dims=1:ndims(A), flags=FFTW.ESTIMATE, timelimit=<none>)
 
    Pre-plan an optimized r2r transform, similar to :func:`Base.plan_fft`
    except that the transforms (and the first three arguments)
    correspond to :func:`r2r` and :func:`r2r!`, respectively.
 
-.. function:: plan_r2r!(A, kind [, dims [, flags [, timelimit]]])
+.. function:: plan_r2r!(A, kind, dims=1:ndims(A), flags=FFTW.ESTIMATE, timelimit=<none>)
 
    Similar to :func:`Base.plan_fft`, but corresponds to :func:`r2r!`.
 
@@ -4265,7 +4268,7 @@ Parallel Computing
 
    Removes the specified workers. 
 
-.. function:: interrupt([pids...])
+.. function:: interrupt(pids...)
 
    Interrupt the current executing task on the specified workers. This is
    equivalent to pressing Ctrl-C on the local machine. If no arguments are given,
@@ -4375,7 +4378,7 @@ Parallel Computing
 Distributed Arrays
 ------------------
 
-.. function:: DArray(init, dims, [procs, dist])
+.. function:: DArray(init, dims, procs=<all workers>, dist=<default>)
 
    Construct a distributed array. ``init`` is a function that accepts a tuple of index ranges. 
    This function should allocate a local chunk of the distributed array and initialize it for the specified indices. 
@@ -4522,16 +4525,16 @@ System
 
    Set the current working directory. Returns the new current directory.
 
-.. function:: cd(f, [dir])
+.. function:: cd(f, dir=homedir())
 
    Temporarily changes the current working directory (HOME if not specified) and applies function f before returning.
 
-.. function:: mkdir(path, [mode])
+.. function:: mkdir(path, mode=0o777)
 
    Make a new directory with name ``path`` and permissions ``mode``.
    ``mode`` defaults to 0o777, modified by the current file creation mask.
 
-.. function:: mkpath(path, [mode])
+.. function:: mkpath(path, mode=0o777)
 
    Create all directories in the given ``path``, with permissions ``mode``.
    ``mode`` defaults to 0o777, modified by the current file creation mask.
@@ -4544,7 +4547,7 @@ System
 
    Get julia's process ID.
 
-.. function:: time([t::TmStruct])
+.. function:: time(), time(t::TmStruct)
 
    Get the system time in seconds since the epoch, with fairly high (typically, microsecond) resolution. When passed a ``TmStruct``, converts it to a number of seconds since the epoch.
 
@@ -4552,15 +4555,15 @@ System
 
    Get the time in nanoseconds. The time corresponding to 0 is undefined, and wraps every 5.8 years.
 
-.. function:: strftime([format], time)
+.. function:: strftime(time), strftime(format::String, time)
 
    Convert time, given as a number of seconds since the epoch or a ``TmStruct``, to a formatted string using the given format. Supported formats are the same as those in the standard C library.
 
-.. function:: strptime([format], timestr)
+.. function:: strptime(timestr), strptime(format::String, timestr)
 
    Parse a formatted time string into a ``TmStruct`` giving the seconds, minute, hour, date, etc. Supported formats are the same as those in the standard C library. On some platforms, timezones will not be parsed correctly. If the result of this function will be passed to ``time`` to convert it to seconds since the epoch, the ``isdst`` field should be filled in manually. Setting it to ``-1`` will tell the C library to use the current system settings to determine the timezone.
 
-.. function:: TmStruct([seconds])
+.. function:: TmStruct(seconds::Real)
 
    Convert a number of seconds since the epoch to broken-down format, with fields ``sec``, ``min``, ``hour``, ``mday``, ``month``, ``year``, ``wday``, ``yday``, and ``isdst``.
 
@@ -4625,7 +4628,7 @@ C Interface
    ccall may be used to call a function pointer returned by dlsym, but note that this usage is generally discouraged to facilitate future static compilation.
    Note that the argument type tuple must be a literal tuple, and not a tuple-valued variable or expression.
 
-.. function:: cglobal((symbol, library) or ptr [, Type=Void])
+.. function:: cglobal((symbol, library) or ptr, Type=Void)
 
    Obtain a pointer to a global variable in a C-exported shared library, specified exactly as in ``ccall``.  Returns a ``Ptr{Type}``, defaulting to ``Ptr{Void}`` if no Type argument is supplied.  The values can be read or written by ``unsafe_load`` or ``unsafe_store!``, respectively.
 
@@ -4645,7 +4648,7 @@ C Interface
     bar = cfunction(foo, Float64, ())
 
 
-.. function:: dlopen(libfile::String [, flags::Integer])
+.. function:: dlopen(libfile::String, flags=RTLD_LAZY|RTLD_DEEPBIND|RTLD_LOCAL)
 
    Load a shared library, returning an opaque handle.
 
@@ -4661,7 +4664,7 @@ C Interface
    symbols to be available for usage in other shared libraries, in
    situations where there are dependencies between shared libraries.
 
-.. function:: dlopen_e(libfile::String [, flags::Integer])
+.. function:: dlopen_e(libfile::String, flags=RTLD_LAZY|RTLD_DEEPBIND|RTLD_LOCAL)
 
    Similar to ``dlopen``, except returns a NULL pointer instead of raising errors.
 
@@ -4744,7 +4747,7 @@ C Interface
    Copy ``N`` elements from collection ``src`` starting at offset ``so``, to
    array ``dest`` starting at offset ``do``.
 
-.. function:: pointer(a[, index])
+.. function:: pointer(a, index=1)
 
    Get the native address of an array element. Be careful to ensure that a julia
    reference to ``a`` exists as long as this pointer will be used.
@@ -4753,7 +4756,7 @@ C Interface
 
    Convert an integer to a pointer of the specified element type.
 
-.. function:: pointer_to_array(p, dims[, own])
+.. function:: pointer_to_array(p, dims, own=false)
 
    Wrap a native pointer as a Julia Array object. The pointer element type determines
    the array element type. ``own`` optionally specifies whether Julia should take
@@ -4880,7 +4883,7 @@ Errors
 
    Throw an object as an exception
 
-.. function:: rethrow([e])
+.. function:: rethrow(e=<current exception>)
 
    Throw an object without changing the current exception backtrace.
    The default argument is the current exception (if called within a
@@ -4907,7 +4910,7 @@ Errors
 
    Convert a system call error code to a descriptive string
 
-.. function:: assert(cond, [text])
+.. function:: assert(cond)
 
    Raise an error if ``cond`` is false. Also available as the macro ``@assert expr``.
 
