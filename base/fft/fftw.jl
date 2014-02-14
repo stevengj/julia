@@ -1,10 +1,12 @@
 module FFTW
 
-export fft, bfft, ifft, rfft, brfft, irfft,
-       plan_fft, plan_bfft, plan_ifft, plan_rfft, plan_brfft, plan_irfft,
-       fft!, bfft!, ifft!, plan_fft!, plan_bfft!, plan_ifft!,
-       r2r, r2r!, plan_r2r, plan_r2r!,
-       export_wisdom, import_wisdom, import_system_wisdom, forget_wisdom,
+using Base.FFT
+
+import Base.FFT: fft, bfft, ifft, rfft, brfft, irfft, plan_fft, plan_bfft, plan_ifft, plan_rfft, plan_brfft, plan_irfft, fft!, bfft!, ifft!, plan_fft!, plan_bfft!, plan_ifft!
+
+export r2r, r2r!, plan_r2r, plan_r2r!
+
+export export_wisdom, import_wisdom, import_system_wisdom, forget_wisdom,
        MEASURE, DESTROY_INPUT, UNALIGNED, CONSERVE_MEMORY, EXHAUSTIVE,
        PRESERVE_INPUT, PATIENT, ESTIMATE, WISDOM_ONLY, NO_TIMELIMIT,
        R2HC, HC2R, DHT, REDFT00, REDFT01, REDFT10, REDFT11,
@@ -207,27 +209,27 @@ alignment_of{T<:fftwDouble}(A::StridedArray{T}) =
 alignment_of{T<:fftwSingle}(A::StridedArray{T}) = 
    ccall((:fftwf_alignment_of, libfftwf), Int32, (Ptr{T},), A)
 
-# Plan (low-level)
+# FFTWPlan (low-level)
 
 # low-level storage of the FFTW plan, along with the information
 # needed to determine whether it is applicable.   We need to put
 # this into a type to support a finalizer on the fftw_plan.
-type Plan{T<:fftwNumber}
+type FFTWPlan{T<:fftwNumber} <: Plan{T}
     plan::Ptr{Void}
     sz::Dims # size of array on which plan operates (Int tuple)
     istride::Dims # strides of input
     ialign::Int32 # alignment mod 16 of input
-    function Plan(plan::Ptr{Void}, sz::Dims, istride::Dims, ialign::Int32)
+    function FFTWPlan(plan::Ptr{Void}, sz::Dims, istride::Dims, ialign::Int32)
         p = new(plan,sz,istride,ialign)
         finalizer(p, p -> destroy_plan(T, p.plan))
         return p
     end
 end
-Plan{T<:fftwNumber}(plan::Ptr{Void}, X::StridedArray{T}) = Plan{T}(plan, size(X), strides(X), alignment_of(X))
+FFTWPlan{T<:fftwNumber}(plan::Ptr{Void}, X::StridedArray{T}) = FFTWPlan{T}(plan, size(X), strides(X), alignment_of(X))
 
-# Check whether a Plan is applicable to a given input array, and
+# Check whether a FFTWPlan is applicable to a given input array, and
 # throw an informative error if not:
-function assert_applicable{T<:fftwNumber}(p::Plan{T}, X::StridedArray{T})
+function assert_applicable{T<:fftwNumber}(p::FFTWPlan{T}, X::StridedArray{T})
     if size(X) != p.sz
         throw(ArgumentError("FFTW plan applied to wrong-size array"))
     elseif strides(X) != p.istride
@@ -238,9 +240,9 @@ function assert_applicable{T<:fftwNumber}(p::Plan{T}, X::StridedArray{T})
 end
 
 # NOTE ON GC (garbage collection):
-#    The Plan has a finalizer so that gc will destroy the plan,
+#    The FFTWPlan has a finalizer so that gc will destroy the plan,
 #    which is necessary for gc to work with plan_fft.  However,
-#    even when we are creating a single-use Plan [e.g. for fftn(x)],
+#    even when we are creating a single-use FFTWPlan [e.g. for fftn(x)],
 #    we intentionally do NOT call destroy_plan explicitly, and instead
 #    wait for garbage collection.  The reason is that, in the common
 #    case where the user calls fft(x) a second time soon afterwards,
@@ -289,12 +291,12 @@ function fix_kinds(region, kinds)
     return kinds
 end
 
-# low-level Plan creation (for internal use in FFTW module)
+# low-level FFTWPlan creation (for internal use in FFTW module)
 
 for (Tr,Tc,fftw,lib) in ((:Float64,:Complex128,"fftw",libfftw),
                          (:Float32,:Complex64,"fftwf",libfftwf))
 
-    @eval function Plan(X::StridedArray{$Tc}, Y::StridedArray{$Tc},
+    @eval function FFTWPlan(X::StridedArray{$Tc}, Y::StridedArray{$Tc},
                         region, direction::Integer,
                         flags::Unsigned, timelimit::Real)
         set_timelimit($Tr, timelimit)
@@ -309,10 +311,10 @@ for (Tr,Tc,fftw,lib) in ((:Float64,:Complex128,"fftw",libfftw),
         if plan == C_NULL
             error("FFTW could not create plan") # shouldn't normally happen
         end
-        return Plan(plan, X)
+        return FFTWPlan(plan, X)
     end
 
-    @eval function Plan(X::StridedArray{$Tr}, Y::StridedArray{$Tc},
+    @eval function FFTWPlan(X::StridedArray{$Tr}, Y::StridedArray{$Tc},
                         region, flags::Unsigned, timelimit::Real)
         region = circshift([region...],-1) # FFTW halves last dim
         set_timelimit($Tr, timelimit)
@@ -327,10 +329,10 @@ for (Tr,Tc,fftw,lib) in ((:Float64,:Complex128,"fftw",libfftw),
         if plan == C_NULL
             error("FFTW could not create plan") # shouldn't normally happen
         end
-        return Plan(plan, X)
+        return FFTWPlan(plan, X)
     end
 
-    @eval function Plan(X::StridedArray{$Tc}, Y::StridedArray{$Tr},
+    @eval function FFTWPlan(X::StridedArray{$Tc}, Y::StridedArray{$Tr},
                         region, flags::Unsigned, timelimit::Real)
         region = circshift([region...],-1) # FFTW halves last dim
         set_timelimit($Tr, timelimit)
@@ -345,10 +347,10 @@ for (Tr,Tc,fftw,lib) in ((:Float64,:Complex128,"fftw",libfftw),
         if plan == C_NULL
             error("FFTW could not create plan") # shouldn't normally happen
         end
-        return Plan(plan, X)
+        return FFTWPlan(plan, X)
     end
 
-    @eval function Plan_r2r(X::StridedArray{$Tr}, Y::StridedArray{$Tr},
+    @eval function FFTWPlan_r2r(X::StridedArray{$Tr}, Y::StridedArray{$Tr},
                             region, kinds,
                             flags::Unsigned, timelimit::Real)
         kinds = fix_kinds(region, kinds)
@@ -364,11 +366,11 @@ for (Tr,Tc,fftw,lib) in ((:Float64,:Complex128,"fftw",libfftw),
         if plan == C_NULL
             error("FFTW could not create plan") # shouldn't normally happen
         end
-        return Plan(plan, X)
+        return FFTWPlan(plan, X)
     end
 
     # support r2r transforms of complex = transforms of real & imag parts
-    @eval function Plan_r2r(X::StridedArray{$Tc}, Y::StridedArray{$Tc},
+    @eval function FFTWPlan_r2r(X::StridedArray{$Tc}, Y::StridedArray{$Tc},
                             region, kinds,
                             flags::Unsigned, timelimit::Real)
         kinds = fix_kinds(region, kinds)
@@ -387,7 +389,7 @@ for (Tr,Tc,fftw,lib) in ((:Float64,:Complex128,"fftw",libfftw),
         if plan == C_NULL
             error("FFTW could not create plan") # shouldn't normally happen
         end
-        return Plan(plan, X)
+        return FFTWPlan(plan, X)
     end
 
 end
@@ -420,7 +422,7 @@ for (f,direction) in ((:fft,:FORWARD), (:bfft,:BACKWARD))
     @eval begin
         function $f{T<:fftwComplex}(X::StridedArray{T}, region)
             Y = similar(X, T)
-            p = Plan(X, Y, region, $direction, ESTIMATE, NO_TIMELIMIT)
+            p = FFTWPlan(X, Y, region, $direction, ESTIMATE, NO_TIMELIMIT)
             execute(T, p.plan)
             # do not destroy_plan ... see above note on gc
             return Y
@@ -428,7 +430,7 @@ for (f,direction) in ((:fft,:FORWARD), (:bfft,:BACKWARD))
 
         # in-place version
         function $f!{T<:fftwComplex}(X::StridedArray{T},region)
-            p = Plan(X, X, region, $direction, ESTIMATE, NO_TIMELIMIT)
+            p = FFTWPlan(X, X, region, $direction, ESTIMATE, NO_TIMELIMIT)
             execute(T, p.plan)
             # do not destroy_plan ... see above note on gc
             return X
@@ -444,7 +446,7 @@ for (f,direction) in ((:fft,:FORWARD), (:bfft,:BACKWARD))
                                                          flags::Unsigned,
                                                          tlim::Real)
             Y = similar(X, T)
-            p = Plan(X, Y, region, $direction, flags, tlim)
+            p = FFTWPlan(X, Y, region, $direction, flags, tlim)
             return Z::StridedArray{T} -> begin
                 assert_applicable(p, Z)
                 W = similar(Z, T)
@@ -456,7 +458,7 @@ for (f,direction) in ((:fft,:FORWARD), (:bfft,:BACKWARD))
         function $plan_f{T<:Number}(X::StridedArray{T}, region, 
                                     flags::Unsigned, tlim::Real)
             Y = complexfloat(X) # in-place transform
-            p = Plan(Y, Y, region, $direction, flags, tlim)
+            p = FFTWPlan(Y, Y, region, $direction, flags, tlim)
             return Z::StridedArray{T} -> begin
                 W = complexfloat(Z) # in-place transform
                 assert_applicable(p, W)
@@ -469,7 +471,7 @@ for (f,direction) in ((:fft,:FORWARD), (:bfft,:BACKWARD))
                                                           region,
                                                           flags::Unsigned,
                                                           tlim::Real)
-            p = Plan(X, X, region, $direction, flags, tlim)
+            p = FFTWPlan(X, X, region, $direction, flags, tlim)
             return Z::StridedArray{T} -> begin
                 assert_applicable(p, Z)
                 execute(p.plan, Z, Z)
@@ -530,7 +532,7 @@ for (Tr,Tc) in ((:Float32,:Complex64),(:Float64,:Complex128))
             osize = [size(X)...]
             osize[d1] = osize[d1]>>1 + 1
             Y = Array($Tc, osize...)
-            p = Plan(X, Y, region, ESTIMATE, NO_TIMELIMIT)
+            p = FFTWPlan(X, Y, region, ESTIMATE, NO_TIMELIMIT)
             execute($Tr, p.plan)
             # do not destroy_plan ... see above note on gc
             return Y
@@ -547,7 +549,7 @@ for (Tr,Tc) in ((:Float32,:Complex64),(:Float64,:Complex128))
             osize = [size(X)...]
             osize[d1] = osize[d1]>>1 + 1
             Y = Array($Tc, osize...)
-            p = Plan(X, Y, region, flags, tlim)
+            p = FFTWPlan(X, Y, region, flags, tlim)
             return Z::StridedArray{$Tr} -> begin
                 assert_applicable(p, Z)
                 W = Array($Tc, osize...)
@@ -565,7 +567,7 @@ for (Tr,Tc) in ((:Float32,:Complex64),(:Float64,:Complex128))
             @assert osize[region] == d>>1 + 1
             osize[region] = d
             Y = Array($Tr, osize...)
-            p = Plan(X, Y, region, ESTIMATE | PRESERVE_INPUT, NO_TIMELIMIT)
+            p = FFTWPlan(X, Y, region, ESTIMATE | PRESERVE_INPUT, NO_TIMELIMIT)
             execute($Tr, p.plan)
             # do not destroy_plan ... see above note on gc
             return Y
@@ -578,7 +580,7 @@ for (Tr,Tc) in ((:Float32,:Complex64),(:Float64,:Complex128))
             @assert osize[d1] == d>>1 + 1
             osize[d1] = d
             Y = Array($Tr, osize...)
-            p = Plan(X, Y, region, ESTIMATE, NO_TIMELIMIT)
+            p = FFTWPlan(X, Y, region, ESTIMATE, NO_TIMELIMIT)
             execute($Tr, p.plan)
             # do not destroy_plan ... see above note on gc
             return Y
@@ -603,7 +605,7 @@ for (Tr,Tc) in ((:Float32,:Complex64),(:Float64,:Complex128))
             @assert osize[region] == d>>1 + 1
             osize[region] = d
             Y = Array($Tr, osize...)
-            p = Plan(X, Y, region, flags | PRESERVE_INPUT, tlim)
+            p = FFTWPlan(X, Y, region, flags | PRESERVE_INPUT, tlim)
             return Z::StridedArray{$Tc} -> begin
                 assert_applicable(p, Z)
                 W = Array($Tr, osize...)
@@ -623,7 +625,7 @@ for (Tr,Tc) in ((:Float32,:Complex64),(:Float64,:Complex128))
             osize[d1] = d
             Y = Array($Tr, osize...)
             X = copy(X)
-            p = Plan(X, Y, region, flags, tlim)
+            p = FFTWPlan(X, Y, region, flags, tlim)
             return Z::StridedArray{$Tc} -> begin
                 assert_applicable(p, Z)
                 Z = copy(Z)
@@ -677,21 +679,6 @@ plan_irfft(X, d, region, flags) = plan_irfft(X, d, region, flags, NO_TIMELIMIT)
 plan_irfft(X, d, region) = plan_irfft(X, d, region, ESTIMATE, NO_TIMELIMIT)
 plan_irfft(X, d) = plan_irfft(X, d, 1:ndims(X), ESTIMATE, NO_TIMELIMIT)
 
-# A DFT is unambiguously defined as just the identity operation for scalars
-fft(x::Number) = x
-ifft(x::Number) = x
-bfft(x::Number) = x
-rfft(x::Real) = x
-irfft(x::Number, d::Integer) = d == 1 ? real(x) : throw(BoundsError())
-brfft(x::Number, d::Integer) = d == 1 ? real(x) : throw(BoundsError())
-fft(x::Number, dims) = length(dims) == 0 || dims[1] == 1 ? x : throw(BoundsError())
-ifft(x::Number, dims) = length(dims) == 0 || dims[1] == 1 ? x : throw(BoundsError())
-bfft(x::Number, dims) = length(dims) == 0 || dims[1] == 1 ? x : throw(BoundsError())
-fft(x::Number, dims) = length(dims) == 0 || dims[1] == 1 ? x : throw(BoundsError())
-rfft(x::Real, dims) = dims[1] == 1 ? x : throw(BoundsError())
-irfft(x::Number, d::Integer, dims) = d == 1 && dims[1] == 1 ? real(x) : throw(BoundsError())
-brfft(x::Number, d::Integer, dims) = d == 1 && dims[1] == 1 ? real(x) : throw(BoundsError())
-
 plan_fft(x::Number) = x -> x
 plan_ifft(x::Number) = x -> x
 plan_bfft(x::Number) = x -> x
@@ -724,14 +711,14 @@ plan_brfft(x::Number, d::Integer, dims, flags, tlim) = plan_brfft(x, d, dims)
 
 function r2r{T<:fftwNumber}(X::StridedArray{T}, kinds, region)
     Y = similar(X, T)
-    p = Plan_r2r(X, Y, region, kinds, ESTIMATE, NO_TIMELIMIT)
+    p = FFTWPlan_r2r(X, Y, region, kinds, ESTIMATE, NO_TIMELIMIT)
     execute(T, p.plan)
     # do not destroy_plan ... see above note on gc
     return Y
 end
 
 function r2r!{T<:fftwNumber}(X::StridedArray{T}, kinds, region)
-    p = Plan_r2r(X, X, region, kinds, ESTIMATE, NO_TIMELIMIT)
+    p = FFTWPlan_r2r(X, X, region, kinds, ESTIMATE, NO_TIMELIMIT)
     execute(T, p.plan)
     # do not destroy_plan ... see above note on gc
     return X
@@ -747,7 +734,7 @@ end
 function plan_r2r{T<:fftwNumber}(
     X::StridedArray{T}, kinds, region, flags::Unsigned, tlim::Real)
     Y = similar(X, T)
-    p = Plan_r2r(X, Y, region, kinds, flags, tlim)
+    p = FFTWPlan_r2r(X, Y, region, kinds, flags, tlim)
     return Z::StridedArray{T} -> begin
         assert_applicable(p, Z)
         W = similar(Z, T)
@@ -759,7 +746,7 @@ end
 function plan_r2r{T<:Number}(X::StridedArray{T}, kinds, region,
                              flags::Unsigned, tlim::Real)
     Y = T<:Complex ? complexfloat(X) : float(X)
-    p = Plan_r2r(Y, Y, region, kinds, flags, tlim)
+    p = FFTWPlan_r2r(Y, Y, region, kinds, flags, tlim)
     return Z::StridedArray{T} -> begin
         W = T<:Complex ? complexfloat(Z) : float(Z)
         execute_r2r(p.plan, W, W)
@@ -769,7 +756,7 @@ end
 
 function plan_r2r!{T<:fftwNumber}(
     X::StridedArray{T}, kinds,region,flags::Unsigned, tlim::Real)
-    p = Plan_r2r(X, X, region, kinds, flags, tlim)
+    p = FFTWPlan_r2r(X, X, region, kinds, flags, tlim)
     return Z::StridedArray{T} -> begin
         assert_applicable(p, Z)
         execute_r2r(p.plan, Z, Z)
