@@ -4,6 +4,8 @@ using Base.FFT
 
 import Base.FFT: fft, bfft, ifft, rfft, brfft, irfft, plan_fft, plan_bfft, plan_ifft, plan_rfft, plan_brfft, plan_irfft, fft!, bfft!, ifft!, plan_fft!, plan_bfft!, plan_ifft!
 
+import Base: show, *
+
 export r2r, r2r!, plan_r2r, plan_r2r!
 
 export export_wisdom, import_wisdom, import_system_wisdom, forget_wisdom,
@@ -201,7 +203,8 @@ set_timelimit(precision::fftwTypeSingle,seconds) =
 #   to 16-byte boundaries (address mod 16 == 0), but this may not be
 #   true for data imported from external C code, or for SubArrays.
 #   Use the undocumented routine fftw_alignment_of to determine the 
-#   alignment of a given pointer modulo whatever FFTW needs.
+#   alignment of a given pointer modulo whatever FFTW needs; this
+#   function will be documented in FFTW 3.3.4.
 
 alignment_of{T<:fftwDouble}(A::StridedArray{T}) = 
    ccall((:fftw_alignment_of, libfftw), Int32, (Ptr{T},), A)

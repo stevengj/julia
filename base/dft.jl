@@ -1,6 +1,6 @@
 module DFT
 
-# DFT plan where the inputs are an array of type T
+# DFT plan where the inputs are an array of eltype T
 abstract Plan{T}
 
 import Base: show, size, eltype, *
@@ -9,31 +9,40 @@ eltype{T}(::Plan{T}) = T
 
 ##############################################################################
 export fft, ifft, bfft, fft!, ifft!, bfft!,
-       plan_fft, plan_ifft, plan_bfft, plan_fft!, plan_ifft!, plan_bfft!
+       plan_fft, plan_ifft, plan_bfft, plan_fft!, plan_ifft!, plan_bfft!,
+       rfft, irfft, brfft, plan_rfft, plan_irfft, plan_brfft
 
-floatcomplex{T<:FloatingPoint}(x::AbstractArray{T}) = complex(x)
 floatcomplex{T<:FloatingPoint}(x::AbstractArray{Complex{T}}) = x
-floatcomplex{T<:Complex}(x::AbstractArray{T}) = float(x)
-floatcomplex{T<:Real}(x::AbstractArray{T}) = copy!(similar(x, typeof(complex(float(one(T))))), x)
 
-# implementations only need to provide plan_X(x, dims) and plan_X!(x, dims)
-# for X in (:fft, :bfft, :ifft):
-for f in (:fft, :bfft, :ifft, :fft!, :bfft!, :ifft!)
+# return an Array, rather than similar(x), to avoid an extra copy for FFTW
+# (which only works on StridedArray types).
+floatcomplex{T<:Complex}(x::AbstractArray{T}) = copy!(Array(typeof(float(one(T))), size(x)), x)
+floatcomplex{T<:FloatingPoint}(x::AbstractArray{T}) = copy!(Array(typeof(complex(one(T))), size(x)), x)
+floatcomplex{T<:Real}(x::AbstractArray{T}) = copy!(Array(typeof(complex(float(one(T)))), size(x)), x)
+
+# implementations only need to provide plan_X(x, dims)
+# for X in (:fft, :bfft, ...):
+for f in (:fft, :bfft, :ifft, :fft!, :bfft!, :ifft!, :rfft)
     pf = symbol(string("plan_", f))
     @eval begin
         $f(x::AbstractArray) = $pf(x) * x
         $f(x::AbstractArray, dims) = $pf(x, dims) * x
         $pf(x::AbstractArray) = $pf(x, 1:ndims(x))
     end
-    # promote to a complex floating-point type (out-of-place only),
-    # so implementations only need Complex{Float} methods
-    if string(f)[end] != "!"
-        @eval begin
-            $f{T<:Real}(x::AbstractArray{T}, dims=1:ndims(x)) = $f(floatcomplex(x), dims)
-            $f{T<:Integer}(x::AbstractArray{Complex{T}}, dims=1:ndims(x)) = $f(floatcomplex(x), dims)
-        end
+end
+
+# promote to a complex floating-point type (out-of-place only),
+# so implementations only need Complex{Float} methods
+for f in (:fft, :bfft, :ifft)
+    @eval begin
+        $f{T<:Real}(x::AbstractArray{T}, dims=1:ndims(x)) = $f(floatcomplex(x), dims)
+        $f{T<:Union(Integer,Rational)}(x::AbstractArray{Complex{T}}, dims=1:ndims(x)) = $f(floatcomplex(x), dims)
     end
 end
+rfft{T<:Union(Integer,Rational)}(x::AbstractArray{T}, dims=1:ndims(x)) = rfft(float(x), dims)
+
+# only require implmentation to provide *(::Plan{T}, ::Array{T}):
+*{T}(p::Plan{T}, x::AbstractArray) = p * copy!(Array(x, T, size(x)), x)
 
 ##############################################################################
 # implementations only need to provide the unnormalized backwards FFT,
@@ -41,7 +50,7 @@ end
 
 immutable ScaledPlan{T} <: Plan{T}
     p::Plan{T}
-    scale::T
+    scale::Number # not T, to avoid spurious promotion to Complex
 end
 ScaledPlan{T}(p::Plan{T}, scale::Number) = ScaledPlan{T}(p, scale)
 ScaledPlan{T}(p::ScaledPlan{T}, α::Number) = ScaledPlan{T}(p, p.scale * α)
@@ -54,19 +63,59 @@ show(io::IO, p::ScaledPlan) = print(io, p.p, "; scaled by ", p.scale)
 *(α::Number, p::Plan) = ScaledPlan(p, α)
 *(p::Plan, α::Number) = ScaledPlan(p, α)
 
-# Normalization for ifft
-normalization(X, region) = one(eltype(X)) / prod([size(X)...][[region...]])
+# Normalization for ifft, given unscaled bfft, is 1/prod(dimensions)
+normalization(T, sz, region) = one(T) / prod([sz...][[region...]])
+realtype{T<:Real}(::Type{T}) = T
+realtype{T<:Real}(::Type{Complex{T}}) = T
+realtype{T}(x::AbstractArray{T}) = realtype(T)
+normalization(X, region) = normalization(realtype(X), size(X), region)
 
 plan_ifft(x::AbstractArray, region) = ScaledPlan(plan_bfft(x, region),
-                                               normalization(x, region))
+                                                 normalization(x, region))
 plan_ifft!(x::AbstractArray, region) = ScaledPlan(plan_bfft!(x, region),
-                                                normalization(x, region))
+                                                  normalization(x, region))
 
 ##############################################################################
-# real-input DFTs are annoying because the output has a different size
+# Real-input DFTs are annoying because the output has a different size
 # than the input if we want to gain the full factor-of-two(ish) savings
+# For backward real-data transforms, we must specify the original length
+# of the first dimension, since there is no reliable way to detect this
+# from the data (we can't detect whether the dimension was originally even
+# or odd).
 
+for f in (:brfft, :irfft)
+    pf = symbol(string("plan_", f))
+    @eval begin
+        $f(x::AbstractArray, d::Integer) = $pf(x, d) * x
+        $f(x::AbstractArray, d::Integer, dims) = $pf(x, d, dims) * x
+        $pf(x::AbstractArray, d::Integer) = $pf(x, d, 1:ndims(x))
+    end
+end
 
+for f in (:brfft, :irfft)
+    @eval begin
+        $f{T<:Real}(x::AbstractArray{T}, d::Integer, dims=1:ndims(x)) = $f(floatcomplex(x), d, dims)
+        $f{T<:Union(Integer,Rational)}(x::AbstractArray{Complex{T}}, d::Integer, dims=1:ndims(x)) = $f(floatcomplex(x), d, dims)
+    end
+end
+
+function rfft_output_size(x::AbstractArray, region)
+    d1 = first(region)
+    osize = [size(X)...]
+    osize[d1] = osize[d1]>>1 + 1
+    return osize
+end
+
+function brfft_output_size(x::AbstractArray, d::Integer, region)
+    d1 = first(region)
+    osize = [size(X)...]
+    @assert osize[d1] == d>>1 + 1
+    osize[d1] = d
+end
+
+plan_irfft{T}(x::AbstractArray{Complex{T}}, d::Integer, region) = 
+    ScaledPlan(plan_brfft(x, d, region),
+               normalization(T, brfft_output_size(x, d, region), region))
 
 ##############################################################################
 # A DFT is unambiguously defined as just the identity operation for scalars
