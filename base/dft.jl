@@ -12,13 +12,13 @@ export fft, ifft, bfft, fft!, ifft!, bfft!,
        plan_fft, plan_ifft, plan_bfft, plan_fft!, plan_ifft!, plan_bfft!,
        rfft, irfft, brfft, plan_rfft, plan_irfft, plan_brfft
 
-floatcomplex{T<:FloatingPoint}(x::AbstractArray{Complex{T}}) = x
+complexfloat{T<:FloatingPoint}(x::AbstractArray{Complex{T}}) = x
 
 # return an Array, rather than similar(x), to avoid an extra copy for FFTW
 # (which only works on StridedArray types).
-floatcomplex{T<:Complex}(x::AbstractArray{T}) = copy!(Array(typeof(float(one(T))), size(x)), x)
-floatcomplex{T<:FloatingPoint}(x::AbstractArray{T}) = copy!(Array(typeof(complex(one(T))), size(x)), x)
-floatcomplex{T<:Real}(x::AbstractArray{T}) = copy!(Array(typeof(complex(float(one(T)))), size(x)), x)
+complexfloat{T<:Complex}(x::AbstractArray{T}) = copy!(Array(typeof(float(one(T))), size(x)), x)
+complexfloat{T<:FloatingPoint}(x::AbstractArray{T}) = copy!(Array(typeof(complex(one(T))), size(x)), x)
+complexfloat{T<:Real}(x::AbstractArray{T}) = copy!(Array(typeof(complex(float(one(T)))), size(x)), x)
 
 # implementations only need to provide plan_X(x, dims)
 # for X in (:fft, :bfft, ...):
@@ -27,7 +27,7 @@ for f in (:fft, :bfft, :ifft, :fft!, :bfft!, :ifft!, :rfft)
     @eval begin
         $f(x::AbstractArray) = $pf(x) * x
         $f(x::AbstractArray, dims) = $pf(x, dims) * x
-        $pf(x::AbstractArray) = $pf(x, 1:ndims(x))
+        $pf(x::AbstractArray; kws...) = $pf(x, 1:ndims(x); kws...)
     end
 end
 
@@ -35,14 +35,18 @@ end
 # so implementations only need Complex{Float} methods
 for f in (:fft, :bfft, :ifft)
     @eval begin
-        $f{T<:Real}(x::AbstractArray{T}, dims=1:ndims(x)) = $f(floatcomplex(x), dims)
-        $f{T<:Union(Integer,Rational)}(x::AbstractArray{Complex{T}}, dims=1:ndims(x)) = $f(floatcomplex(x), dims)
+        $f{T<:Real}(x::AbstractArray{T}, dims=1:ndims(x)) = $f(complexfloat(x), dims)
+        $f{T<:Union(Integer,Rational)}(x::AbstractArray{Complex{T}}, dims=1:ndims(x)) = $f(complexfloat(x), dims)
     end
 end
 rfft{T<:Union(Integer,Rational)}(x::AbstractArray{T}, dims=1:ndims(x)) = rfft(float(x), dims)
 
-# only require implmentation to provide *(::Plan{T}, ::Array{T}):
+# only require implementation to provide *(::Plan{T}, ::Array{T})
 *{T}(p::Plan{T}, x::AbstractArray) = p * copy!(Array(x, T, size(x)), x)
+
+# Implementations should also implement A_mul_B!(Y, plan, X) so as to support
+# pre-allocated output arrays.  We don't define * in terms of A_mul_B!
+# generically here, however, because of subtleties for in-place and rfft plans.
 
 ##############################################################################
 # implementations only need to provide the unnormalized backwards FFT,
@@ -50,14 +54,14 @@ rfft{T<:Union(Integer,Rational)}(x::AbstractArray{T}, dims=1:ndims(x)) = rfft(fl
 
 immutable ScaledPlan{T} <: Plan{T}
     p::Plan{T}
-    scale::Number # not T, to avoid spurious promotion to Complex
+    scale::Number # not T, to avoid unnecessary promotion to Complex
 end
 ScaledPlan{T}(p::Plan{T}, scale::Number) = ScaledPlan{T}(p, scale)
-ScaledPlan{T}(p::ScaledPlan{T}, α::Number) = ScaledPlan{T}(p, p.scale * α)
+ScaledPlan{T}(p::ScaledPlan{T}, α::Number) = ScaledPlan{T}(p.p, p.scale * α)
 
 size(p::ScaledPlan) = size(p.p)
 
-show(io::IO, p::ScaledPlan) = print(io, p.p, "; scaled by ", p.scale)
+show(io::IO, p::ScaledPlan) = print(io, p.p, ", * ", p.scale)
 
 *(p::ScaledPlan, x::AbstractArray) = scale!(p.p * x, p.scale)
 *(α::Number, p::Plan) = ScaledPlan(p, α)
@@ -70,10 +74,10 @@ realtype{T<:Real}(::Type{Complex{T}}) = T
 realtype{T}(x::AbstractArray{T}) = realtype(T)
 normalization(X, region) = normalization(realtype(X), size(X), region)
 
-plan_ifft(x::AbstractArray, region) = ScaledPlan(plan_bfft(x, region),
-                                                 normalization(x, region))
-plan_ifft!(x::AbstractArray, region) = ScaledPlan(plan_bfft!(x, region),
-                                                  normalization(x, region))
+plan_ifft(x::AbstractArray, region; kws...) =
+    ScaledPlan(plan_bfft(x, region; kws...), normalization(x, region))
+plan_ifft!(x::AbstractArray, region; kws...) =
+    ScaledPlan(plan_bfft!(x, region; kws...), normalization(x, region))
 
 ##############################################################################
 # Real-input DFTs are annoying because the output has a different size
@@ -88,14 +92,14 @@ for f in (:brfft, :irfft)
     @eval begin
         $f(x::AbstractArray, d::Integer) = $pf(x, d) * x
         $f(x::AbstractArray, d::Integer, dims) = $pf(x, d, dims) * x
-        $pf(x::AbstractArray, d::Integer) = $pf(x, d, 1:ndims(x))
+        $pf(x::AbstractArray, d::Integer;kws...) = $pf(x, d, 1:ndims(x);kws...)
     end
 end
 
 for f in (:brfft, :irfft)
     @eval begin
-        $f{T<:Real}(x::AbstractArray{T}, d::Integer, dims=1:ndims(x)) = $f(floatcomplex(x), d, dims)
-        $f{T<:Union(Integer,Rational)}(x::AbstractArray{Complex{T}}, d::Integer, dims=1:ndims(x)) = $f(floatcomplex(x), d, dims)
+        $f{T<:Real}(x::AbstractArray{T}, d::Integer, dims=1:ndims(x)) = $f(complexfloat(x), d, dims)
+        $f{T<:Union(Integer,Rational)}(x::AbstractArray{Complex{T}}, d::Integer, dims=1:ndims(x)) = $f(complexfloat(x), d, dims)
     end
 end
 
@@ -113,26 +117,10 @@ function brfft_output_size(x::AbstractArray, d::Integer, region)
     osize[d1] = d
 end
 
-plan_irfft{T}(x::AbstractArray{Complex{T}}, d::Integer, region) = 
-    ScaledPlan(plan_brfft(x, d, region),
+plan_irfft{T}(x::AbstractArray{Complex{T}}, d::Integer, region; kws...) = 
+    ScaledPlan(plan_brfft(x, d, region; kws...),
                normalization(T, brfft_output_size(x, d, region), region))
 
-##############################################################################
-# A DFT is unambiguously defined as just the identity operation for scalars
-
-fft(x::Number) = x
-ifft(x::Number) = x
-bfft(x::Number) = x
-rfft(x::Real) = x
-irfft(x::Number, d::Integer) = d == 1 ? real(x) : throw(BoundsError())
-brfft(x::Number, d::Integer) = d == 1 ? real(x) : throw(BoundsError())
-fft(x::Number, dims) = length(dims) == 0 || dims[1] == 1 ? x : throw(BoundsError())
-ifft(x::Number, dims) = length(dims) == 0 || dims[1] == 1 ? x : throw(BoundsError())
-bfft(x::Number, dims) = length(dims) == 0 || dims[1] == 1 ? x : throw(BoundsError())
-fft(x::Number, dims) = length(dims) == 0 || dims[1] == 1 ? x : throw(BoundsError())
-rfft(x::Real, dims) = dims[1] == 1 ? x : throw(BoundsError())
-irfft(x::Number, d::Integer, dims) = d == 1 && dims[1] == 1 ? real(x) : throw(BoundsError())
-brfft(x::Number, d::Integer, dims) = d == 1 && dims[1] == 1 ? real(x) : throw(BoundsError())
 ##############################################################################
 
 end
