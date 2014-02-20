@@ -193,7 +193,8 @@ include("broadcast.jl")
 importall .Broadcast
 
 # signal processing
-include("fftw.jl")
+include("dft.jl")
+importall .DFT
 include("dsp.jl")
 importall .DSP
 

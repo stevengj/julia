@@ -123,4 +123,29 @@ plan_irfft{T}(x::AbstractArray{Complex{T}}, d::Integer, region; kws...) =
 
 ##############################################################################
 
+export fftshift, ifftshift
+
+fftshift(x) = circshift(x, div([size(x)...],2))
+
+function fftshift(x,dim)
+    s = zeros(Int,ndims(x))
+    s[dim] = div(size(x,dim),2)
+    circshift(x, s)
 end
+
+ifftshift(x) = circshift(x, div([size(x)...],-2))
+
+function ifftshift(x,dim)
+    s = zeros(Int,ndims(x))
+    s[dim] = -div(size(x,dim),2)
+    circshift(x, s)
+end
+
+##############################################################################
+
+# FFTW module (may move to an external package at some point):
+include("fft/FFTW.jl")
+export FFTW, dct, idct, dct!, idct!, plan_dct, plan_idct, plan_dct!, plan_idct!
+
+end
+
