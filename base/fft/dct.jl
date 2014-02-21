@@ -49,8 +49,8 @@ const sqrthalf = sqrt(0.5)
 const sqrt2 = sqrt(2.0)
 const onerange = 1:1
 
-function A_mul_B!(y::StridedArray{T}, p::DCTPlan{T,REDFT10},
-                  x::StridedArray{T})
+function A_mul_B!{T}(y::StridedArray{T}, p::DCTPlan{T,REDFT10},
+                     x::StridedArray{T})
     assert_applicable(p.plan, x, y)
     unsafe_execute!(p.plan, x, y)
     scale!(y, p.nrm)
@@ -64,9 +64,9 @@ function A_mul_B!(y::StridedArray{T}, p::DCTPlan{T,REDFT10},
     return y
 end
 
-# note: idft changes input data
-function A_mul_B!(y::StridedArray{T}, p::DCTPlan{T,REDFT01},
-                  x::StridedArray{T})
+# note: idct changes input data
+function A_mul_B!{T}(y::StridedArray{T}, p::DCTPlan{T,REDFT01},
+                     x::StridedArray{T})
     assert_applicable(p.plan, x, y)
     scale!(x, p.nrm)
     r = p.r

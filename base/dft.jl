@@ -145,6 +145,7 @@ end
 
 # FFTW module (may move to an external package at some point):
 include("fft/FFTW.jl")
+importall .FFTW
 export FFTW, dct, idct, dct!, idct!, plan_dct, plan_idct, plan_dct!, plan_idct!
 
 end

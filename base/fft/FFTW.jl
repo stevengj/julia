@@ -1,6 +1,6 @@
 module FFTW
 
-# import Base: fft, bfft, ifft, rfft, brfft, irfft, plan_fft, plan_bfft, plan_ifft, plan_rfft, plan_brfft, plan_irfft, fft!, bfft!, ifft!, plan_fft!, plan_bfft!, plan_ifft!
+import ..DFT: fft, bfft, ifft, rfft, brfft, irfft, plan_fft, plan_bfft, plan_ifft, plan_rfft, plan_brfft, plan_irfft, fft!, bfft!, ifft!, plan_fft!, plan_bfft!, plan_ifft!, Plan
 
 import Base: show, *, convert, size, strides, ndims, pointer
 
@@ -27,8 +27,8 @@ end
 
 ## Direction of FFT
 
-const FORWARD = int32(-1)
-const BACKWARD = int32(1)
+const FORWARD = -1
+const BACKWARD = 1
 
 ## FFTW Flags from fftw3.h
 
@@ -44,24 +44,24 @@ const WISDOM_ONLY     = uint32(1 << 21)
 
 ## R2R transform kinds
 
-const R2HC    = int32(0)
-const HC2R    = int32(1)
-const DHT     = int32(2)
-const REDFT00 = int32(3)
-const REDFT01 = int32(4)
-const REDFT10 = int32(5)
-const REDFT11 = int32(6)
-const RODFT00 = int32(7)
-const RODFT01 = int32(8)
-const RODFT10 = int32(9)
-const RODFT11 = int32(10)
+const R2HC    = 0
+const HC2R    = 1
+const DHT     = 2
+const REDFT00 = 3
+const REDFT01 = 4
+const REDFT10 = 5
+const REDFT11 = 6
+const RODFT00 = 7
+const RODFT01 = 8
+const RODFT10 = 9
+const RODFT11 = 10
 
 let k2s = [R2HC => "R2HC", HC2R => "HC2R", DHT => "DHT",
            REDFT00 => "REDFT00", REDFT01 => "REDFT01", REDFT10 => "REDFT10",
            REDFT11 => "REDFT11", RODFT00 => "RODFT00", RODFT01 => "RODFT01",
            RODFT10 => "RODFT10", RODFT11 => "RODFT11" ]
     global kind2string
-    kind2string(k::Integer) = k2s[int32(k)]
+    kind2string(k::Integer) = k2s[int(k)]
 end
 
 # FFTW floating-point types:
@@ -73,6 +73,25 @@ typealias fftwDouble Union(Float64,Complex128)
 typealias fftwSingle Union(Float32,Complex64)
 typealias fftwTypeDouble Union(Type{Float64},Type{Complex128})
 typealias fftwTypeSingle Union(Type{Float32},Type{Complex64})
+
+# For ESTIMATE plans, FFTW allows one to pass NULL for the array pointer,
+# since it is not written to.  Hence, it is convenient to create an
+# array-like type that carries a size and a stride like a "real" array
+# but which is converted to C_NULL as a pointer.
+immutable FakeArray{T}
+    sz::Dims
+    st::Dims
+end
+size(a::FakeArray) = a.sz
+strides(a::FakeArray) = a.st
+ndims(a::FakeArray) = length(a.sz)
+convert{T}(::Type{Ptr{T}}, a::FakeArray{T}) = convert(Ptr{T}, C_NULL)
+pointer{T}(a::FakeArray{T}) = convert(Ptr{T}, C_NULL)
+FakeArray(T, sz::Dims) = FakeArray{T}(sz, colmajorstrides(sz))
+FakeArray(T, sz::Int...) = FakeArray(T, sz)
+fakesimilar(flags, X, T) = flags & ESTIMATE != 0 ? FakeArray(T, size(X)) : Array(T, size(X))
+alignment_of(A::FakeArray) = int32(0)
+typealias StridedArrayish{T} Union(StridedArray{T}, FakeArray{T})
 
 ## Julia wrappers around FFTW functions
 
@@ -191,14 +210,15 @@ for P in (:cFFTWPlan, :rFFTWPlan, :r2rFFTWPlan) # complex, r2c/c2r, and r2r
             ialign::Int32 # alignment mod 16 of input
             oalign::Int32 # alignment mod 16 of input
             flags::Uint32 # planner flags
-            function $P(plan::PlanPtr, sz::Dims, istride::Dims,ialign::Int32,
-                        flags::Integer)
-                p = new(plan,sz,istride,ialign,flags)
+            function $P(plan::PlanPtr, sz::Dims, osz::Dims,
+                        istride::Dims, ostride::Dims,
+                        ialign::Int32, oalign::Int32, flags::Integer)
+                p = new(plan,sz,osz,istride,ostride,ialign,oalign,flags)
                 finalizer(p, destroy_plan)
                 return p
             end
         end
-        $P{T<:fftwNumber}(plan::PlanPtr, flags::Integer, X::StridedArrayish{T}, Y::StridedArrayish, K) = $P{T,K,pointer(X) == pointer(Y)}(plan, flags, size(X), size(Y), strides(X), strides(Y), alignment_of(X), alignment_of(Y))
+        $P{T<:fftwNumber}(plan::PlanPtr, flags::Integer, X::StridedArrayish{T}, Y::StridedArrayish, K) = $P{T,K,pointer(X) == pointer(Y)}(plan, size(X), size(Y), strides(X), strides(Y), alignment_of(X), alignment_of(Y), flags)
     end
 end
 
@@ -206,10 +226,10 @@ size(p::FFTWPlan) = (prod(osz), prod(sz))
 
 convert(::Type{PlanPtr}, p::FFTWPlan) = p.plan
 
-destroy_plan{T<:fftwTypeDouble}(plan::FFTWPlan{T}) =
+destroy_plan{T<:fftwDouble}(plan::FFTWPlan{T}) =
     ccall((:fftw_destroy_plan,libfftw), Void, (PlanPtr,), plan)
 
-destroy_plan{T<:fftwTypeSingle}(plan::FFTWPlan{T}) =
+destroy_plan{T<:fftwSingle}(plan::FFTWPlan{T}) =
     ccall((:fftwf_destroy_plan,libfftwf), Void, (PlanPtr,), plan)
 
 # Pretty-printing plans
@@ -263,7 +283,7 @@ function assert_applicable{T}(p::FFTWPlan{T}, X::StridedArray{T})
         throw(ArgumentError("FFTW plan applied to wrong-size array"))
     elseif strides(X) != p.istride
         throw(ArgumentError("FFTW plan applied to wrong-strides array"))
-    elseif alignment_of(X) != p.ialign || p.flags & UNALIGNED
+    elseif alignment_of(X) != p.ialign || p.flags & UNALIGNED != 0
         throw(ArgumentError("FFTW plan applied to array with wrong memory alignment"))
     end
 end
@@ -274,7 +294,7 @@ function assert_applicable{T,K,inplace}(p::FFTWPlan{T,K,inplace}, X::StridedArra
         throw(ArgumentError("FFTW plan applied to wrong-size output"))
     elseif strides(Y) != p.ostride
         throw(ArgumentError("FFTW plan applied to wrong-strides output"))
-    elseif alignment_of(Y) != p.oalign || p.flags & UNALIGNED
+    elseif alignment_of(Y) != p.oalign || p.flags & UNALIGNED != 0
         throw(ArgumentError("FFTW plan applied to output with wrong memory alignment"))
     elseif inplace != (pointer(X) == pointer(Y))
         throw(ArgumentError(string("FFTW ",
@@ -286,23 +306,23 @@ function assert_applicable{T,K,inplace}(p::FFTWPlan{T,K,inplace}, X::StridedArra
 end
 
 # strides for a column-major (Julia-style) array of size == sz
-colmajorstrides(sz) = tuple(1,cumprod(sz[1:end-1])...)
+colmajorstrides(sz) = isempty(sz) ? () : length(sz) == 1 ? (1,) : tuple(1,cumprod(sz[1:end-1])...)
 
 # Execute
 
-unsafe_execute!{T<:fftwTypeDouble}(plan::FFTWPlan{T}) =
+unsafe_execute!{T<:fftwDouble}(plan::FFTWPlan{T}) =
     ccall((:fftw_execute,libfftw), Void, (PlanPtr,), plan)
 
-unsafe_execute!{T<:fftwTypeSingle}(plan::FFTWPlan{T}) =
+unsafe_execute!{T<:fftwSingle}(plan::FFTWPlan{T}) =
     ccall((:fftwf_execute,libfftwf), Void, (PlanPtr,), plan)
 
-unsafe_execute!{T<:fftwTypeDouble}(plan::cFFTWPlan{T}, 
-                                   X::StridedArray{T}, Y::StridedArray{T}) =
+unsafe_execute!{T<:fftwDouble}(plan::cFFTWPlan{T}, 
+                               X::StridedArray{T}, Y::StridedArray{T}) =
     ccall((:fftw_execute_dft,libfftw), Void, 
           (PlanPtr,Ptr{T},Ptr{T}), plan, X, Y)
 
-unsafe_execute!{T<:fftwTypeSingle}(plan::cFFTWPlan{T}, 
-                                   X::StridedArray{T}, Y::StridedArray{T}) =
+unsafe_execute!{T<:fftwSingle}(plan::cFFTWPlan{T}, 
+                               X::StridedArray{T}, Y::StridedArray{T}) =
     ccall((:fftwf_execute_dft,libfftwf), Void, 
           (PlanPtr,Ptr{T},Ptr{T}), plan, X, Y)
 
@@ -345,25 +365,6 @@ unsafe_execute!{T<:fftwSingle}(plan::r2rFFTWPlan{T},
 #    case where the user calls fft(x) a second time soon afterwards,
 #    if destroy_plan has not yet been called then FFTW will internally
 #    re-use the table of trigonometric constants from the first plan.
-
-# For ESTIMATE plans, FFTW allows one to pass NULL for the array pointer,
-# since it is not written to.  Hence, it is convenient to create an
-# array-like type that carries a size and a stride like a "real" array
-# but which is converted to C_NULL as a pointer.
-immutable FakeArray{T}
-    sz::Dims
-    st::Dims
-end
-size(a::FakeArray) = a.sz
-strides(a::FakeArray) = a.st
-ndims(a::FakeArray) = length(a.sz)
-convert{T}(::Type{Ptr{T}}, a::FakeArray{T}) = convert(Ptr{T}, C_NULL)
-pointer(a::FakeArray{T}) = convert(Ptr{T}, C_NULL)
-typealias StridedArrayish{T} = Union(StridedArray{T}, FakeArray{T})
-FakeArray(T, sz::Dims) = FakeArray{T}(sz, colmajorstrides(sz))
-FakeArray(T, sz::Int...) = FakeArray(T, sz)
-fakesimilar(flags, X, T) = flags & ESTIMATE ? FakeArray(T, size(X)) : Array(T, size(X))
-alignment_of(A::FakeArray) = int32(0)
 
 # Compute dims and howmany for FFTW guru planner
 function dims_howmany(X::StridedArray, Y::StridedArrayish,
@@ -505,7 +506,7 @@ for (Tr,Tc,fftw,lib) in ((:Float64,:Complex128,"fftw",libfftw),
         if plan == C_NULL
             error("FFTW could not create plan") # shouldn't normally happen
         end
-        return r2rFFTWPlan(plan, flags, X, Y, tuple(knd...))
+        return r2rFFTWPlan(plan, flags, X, Y, tuple(int(knd)...))
     end
 
 end
@@ -541,7 +542,7 @@ for (f,direction) in ((:fft,:FORWARD), (:bfft,:BACKWARD))
     end
 end
 
-function A_mul_B!(y::StridedArray{T}, p::cFFTWPlan{T}, x::StridedArray{T})
+function A_mul_B!{T}(y::StridedArray{T}, p::cFFTWPlan{T}, x::StridedArray{T})
     assert_applicable(p, x, y)
     unsafe_execute!(p, x, y)
     return y
@@ -607,7 +608,7 @@ for (Tr,Tc) in ((:Float32,:Complex64),(:Float64,:Complex128))
 
         function *(p::rFFTWPlan{$Tc,BACKWARD,false}, x::StridedArray{$Tc})
             y = Array($Tr, p.osz)
-            if p.flags & PRESERVE_INPUT
+            if p.flags & PRESERVE_INPUT != 0
                 assert_applicable(p, x)
                 unsafe_execute!(p, x, y)
             else # need to make a copy to avoid overwriting x
@@ -645,7 +646,7 @@ function plan_r2r!{T<:fftwNumber}(X::StridedArray{T}, kinds, region;
     r2rFFTWPlan(X, X, region, kinds, flags, tlim)
 end
 
-function A_mul_B!(y::StridedArray{T}, p::r2rFFTWPlan{T}, x::StridedArray{T})
+function A_mul_B!{T}(y::StridedArray{T}, p::r2rFFTWPlan{T}, x::StridedArray{T})
     assert_applicable(p, x, y)
     unsafe_execute!(p, x, y)
     return y
