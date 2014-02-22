@@ -1,6 +1,6 @@
 module FFTW
 
-import ..DFT: fft, bfft, ifft, rfft, brfft, irfft, plan_fft, plan_bfft, plan_ifft, plan_rfft, plan_brfft, plan_irfft, fft!, bfft!, ifft!, plan_fft!, plan_bfft!, plan_ifft!, Plan
+import ..DFT: fft, bfft, ifft, rfft, brfft, irfft, plan_fft, plan_bfft, plan_ifft, plan_rfft, plan_brfft, plan_irfft, fft!, bfft!, ifft!, plan_fft!, plan_bfft!, plan_ifft!, Plan, rfft_output_size, brfft_output_size
 
 import Base: show, *, convert, size, strides, ndims, pointer
 
@@ -11,7 +11,7 @@ export export_wisdom, import_wisdom, import_system_wisdom, forget_wisdom,
        PRESERVE_INPUT, PATIENT, ESTIMATE, WISDOM_ONLY, NO_TIMELIMIT,
        R2HC, HC2R, DHT, REDFT00, REDFT01, REDFT10, REDFT11,
        RODFT00, RODFT01, RODFT10, RODFT11,
-       fftwNumber, fftwReal, fftwComplex
+       fftwNumber, fftwReal, fftwComplex, flops
 
 ## FFT: Implement fft by calling fftw.
 
@@ -232,6 +232,30 @@ destroy_plan{T<:fftwDouble}(plan::FFTWPlan{T}) =
 destroy_plan{T<:fftwSingle}(plan::FFTWPlan{T}) =
     ccall((:fftwf_destroy_plan,libfftwf), Void, (PlanPtr,), plan)
 
+cost{T<:fftwDouble}(plan::FFTWPlan{T}) =
+    ccall((:fftw_cost,libfftw), Float64, (PlanPtr,), plan)
+cost{T<:fftwSingle}(plan::FFTWPlan{T}) =
+    ccall((:fftwf_cost,libfftwf), Float64, (PlanPtr,), plan)
+
+let add=[0.0], mul=[0.0], fma=[0.0]
+    global arithmetic_ops
+    function arithmetic_ops{T<:fftwDouble}(plan::FFTWPlan{T})
+        ccall((:fftw_flops,libfftw), Void, 
+              (PlanPtr,Ptr{Float64},Ptr{Float64},Ptr{Float64}), 
+              plan, add, mul, fma)
+        (int64(add[1]), int64(mul[1]), int64(fma[1]))
+    end
+    function arithmetic_ops{T<:fftwSingle}(plan::FFTWPlan{T})
+        ccall((:fftwf_flops,libfftwf), Void, 
+              (PlanPtr,Ptr{Float64},Ptr{Float64},Ptr{Float64}), 
+              plan, add, mul, fma)
+        (int64(add[1]), int64(mul[1]), int64(fma[1]))
+    end
+end
+flops(plan::FFTWPlan) = let ops=arithmetic_ops(plan)
+    ops[1] + ops[2] + 2*ops[3] # add + mul + 2*fma
+end
+
 # Pretty-printing plans
 
 function showfftdims(io, sz::Dims, istride::Dims, T)
@@ -308,7 +332,7 @@ function assert_applicable{T,K,inplace}(p::FFTWPlan{T,K,inplace}, X::StridedArra
 end
 
 # strides for a column-major (Julia-style) array of size == sz
-colmajorstrides(sz) = isempty(sz) ? () : length(sz) == 1 ? (1,) : tuple(1,cumprod(sz[1:end-1])...)
+colmajorstrides(sz) = isempty(sz) ? () : tuple(1,cumprod(Int[sz[1:end-1]...])...)
 
 # Execute
 
@@ -569,15 +593,15 @@ for (Tr,Tc) in ((:Float32,:Complex64),(:Float64,:Complex128))
     @eval begin
         function plan_rfft(X::StridedArray{$Tr}, region;
                            flags::Integer=ESTIMATE, timelimit::Real=NO_TIMELIMIT)
-            osize = FFT.rfft_output_size(X, region)
-            Y = flags&ESTIMATE ? FakeArray($Tc,osize...) : Array($Tc,osize...)
+            osize = rfft_output_size(X, region)
+            Y = flags&ESTIMATE != 0 ? FakeArray($Tc,osize...) : Array($Tc,osize...)
             rFFTWPlan(X, Y, region, flags, timelimit)
         end
 
         function plan_brfft(X::StridedArray{$Tc}, d::Integer, region;
                             flags::Integer=ESTIMATE, timelimit::Real=NO_TIMELIMIT)
-            osize = FFT.brfft_output_size(X, d, region)
-            Y = flags&ESTIMATE ? FakeArray($Tc,osize...) : Array($Tc,osize...)
+            osize = brfft_output_size(X, d, region)
+            Y = flags&ESTIMATE != 0 ? FakeArray($Tr,osize...) : Array($Tr,osize...)
 
             # FFTW currently doesn't support PRESERVE_INPUT for
             # multidimensional out-of-place c2r transforms, so

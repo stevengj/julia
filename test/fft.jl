@@ -25,24 +25,24 @@ ifft!_fft_m4 = fft(m4,1); ifft!(ifft!_fft_m4,1)
 fft!n_m4 = complex(m4); fft!(fft!n_m4)
 ifft!n_fftn_m4 = fft(m4); ifft!(ifft!n_fftn_m4)
 
-pfft_m4 = plan_fft(m4,1)(m4)
-pfftd2_m4 = plan_fft(m4,2)(m4)
-pifft_fft_m4 = plan_ifft(fft_m4,1)(fft_m4)
-pfftn_m4 = plan_fft(m4)(m4)
-pifftn_fftn_m4 = plan_ifft(fftn_m4)(fftn_m4)
+pfft_m4 = plan_fft(m4,1)*m4
+pfftd2_m4 = plan_fft(m4,2)*m4
+pifft_fft_m4 = plan_ifft(fft_m4,1)*fft_m4
+pfftn_m4 = plan_fft(m4)*m4
+pifftn_fftn_m4 = plan_ifft(fftn_m4)*fftn_m4
 
-pfft!_m4 = complex(m4); plan_fft!(pfft!_m4,1)(pfft!_m4)
-pfft!d2_m4 = complex(m4); plan_fft!(pfft!d2_m4,2)(pfft!d2_m4)
-pifft!_fft_m4 = fft(m4,1); plan_ifft!(pifft!_fft_m4,1)(pifft!_fft_m4)
-pfft!n_m4 = complex(m4); plan_fft!(pfft!n_m4)(pfft!n_m4)
-pifft!n_fftn_m4 = fft(m4); plan_ifft!(pifft!n_fftn_m4)(pifft!n_fftn_m4)
+pfft!_m4 = complex(m4); plan_fft!(pfft!_m4,1)*pfft!_m4
+pfft!d2_m4 = complex(m4); plan_fft!(pfft!d2_m4,2)*pfft!d2_m4
+pifft!_fft_m4 = fft(m4,1); plan_ifft!(pifft!_fft_m4,1)*pifft!_fft_m4
+pfft!n_m4 = complex(m4); plan_fft!(pfft!n_m4)*pfft!n_m4
+pifft!n_fftn_m4 = fft(m4); plan_ifft!(pifft!n_fftn_m4)*pifft!n_fftn_m4
 
 sfftn_m4 = fft(sm4)
-psfftn_m4 = plan_fft(sm4)(sm4)
+psfftn_m4 = plan_fft(sm4)*sm4
 sfft!n_b = complex128(b)
 sfft!n_m4 = slice(sfft!n_b,3:6,9:12); fft!(sfft!n_m4)
 psfft!n_b = complex128(b)
-psfft!n_m4 = slice(psfft!n_b,3:6,9:12); plan_fft!(psfft!n_m4)(psfft!n_m4)
+psfft!n_m4 = slice(psfft!n_b,3:6,9:12); plan_fft!(psfft!n_m4)*psfft!n_m4
 
 true_fft_m4 = [
     34.            34.            34.            34.;
@@ -94,7 +94,7 @@ for i = 1:length(m4)
 end
 
 ifft!(sfft!n_m4)
-plan_ifft!(psfft!n_m4)(psfft!n_m4)
+plan_ifft!(psfft!n_m4)*psfft!n_m4
 @test norm(sfft!n_m4 - m4) < 1e-8
 @test norm(psfft!n_m4 - m4) < 1e-8
 
@@ -107,11 +107,11 @@ ifftd3_fftd3_m3d = ifft(fftd3_m3d,3)
 fft!d3_m3d = complex(m3d); fft!(fft!d3_m3d,3)
 ifft!d3_fftd3_m3d = copy(fft!d3_m3d); ifft!(ifft!d3_fftd3_m3d,3)
 
-pfftd3_m3d = plan_fft(m3d,3)(m3d)
-pifftd3_fftd3_m3d = plan_ifft(fftd3_m3d,3)(fftd3_m3d)
+pfftd3_m3d = plan_fft(m3d,3)*m3d
+pifftd3_fftd3_m3d = plan_ifft(fftd3_m3d,3)*fftd3_m3d
 
-pfft!d3_m3d = complex(m3d); plan_fft!(pfft!d3_m3d,3)(pfft!d3_m3d)
-pifft!d3_fftd3_m3d = copy(fft!d3_m3d); plan_ifft!(pifft!d3_fftd3_m3d,3)(pifft!d3_fftd3_m3d)
+pfft!d3_m3d = complex(m3d); plan_fft!(pfft!d3_m3d,3)*pfft!d3_m3d
+pifft!d3_fftd3_m3d = copy(fft!d3_m3d); plan_ifft!(pifft!d3_fftd3_m3d,3)*pifft!d3_fftd3_m3d
 
 @test isa(fftd3_m3d, Array{Complex64,3})
 @test isa(ifftd3_fftd3_m3d, Array{Complex64,3})
@@ -146,12 +146,12 @@ rfft_m4 = rfft(m4,1)
 rfftd2_m4 = rfft(m4,2)
 rfftn_m4 = rfft(m4)
 
-prfft_m4 = plan_rfft(m4,1)(m4)
-prfftd2_m4 = plan_rfft(m4,2)(m4)
-prfftn_m4 = plan_rfft(m4)(m4)
+prfft_m4 = plan_rfft(m4,1)*m4
+prfftd2_m4 = plan_rfft(m4,2)*m4
+prfftn_m4 = plan_rfft(m4)*m4
 
 srfftn_m4 = rfft(sm4)
-psrfftn_m4 = plan_rfft(sm4)(sm4)
+psrfftn_m4 = plan_rfft(sm4)*sm4
 
 for i = 1:3, j = 1:4
     @test_approx_eq rfft_m4[i,j] true_fft_m4[i,j]
@@ -170,9 +170,9 @@ irfft_rfft_m4 = irfft(rfft_m4,size(m4,1),1)
 irfft_rfftd2_m4 = irfft(rfftd2_m4,size(m4,2),2)
 irfftn_rfftn_m4 = irfft(rfftn_m4,size(m4,1))
 
-pirfft_rfft_m4 = plan_irfft(rfft_m4,size(m4,1),1)(rfft_m4)
-pirfft_rfftd2_m4 = plan_irfft(rfftd2_m4,size(m4,2),2)(rfftd2_m4)
-pirfftn_rfftn_m4 = plan_irfft(rfftn_m4,size(m4,1))(rfftn_m4)
+pirfft_rfft_m4 = plan_irfft(rfft_m4,size(m4,1),1)*rfft_m4
+pirfft_rfftd2_m4 = plan_irfft(rfftd2_m4,size(m4,2),2)*rfftd2_m4
+pirfftn_rfftn_m4 = plan_irfft(rfftn_m4,size(m4,1))*rfftn_m4
 
 for i = 1:length(m4)
     @test_approx_eq irfft_rfft_m4[i] m4[i]

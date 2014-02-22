@@ -109,16 +109,17 @@ end
 
 function rfft_output_size(x::AbstractArray, region)
     d1 = first(region)
-    osize = [size(X)...]
+    osize = [size(x)...]
     osize[d1] = osize[d1]>>1 + 1
     return osize
 end
 
 function brfft_output_size(x::AbstractArray, d::Integer, region)
     d1 = first(region)
-    osize = [size(X)...]
+    osize = [size(x)...]
     @assert osize[d1] == d>>1 + 1
     osize[d1] = d
+    return osize
 end
 
 plan_irfft{T}(x::AbstractArray{Complex{T}}, d::Integer, region; kws...) = 
