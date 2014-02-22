@@ -41,7 +41,8 @@ for f in (:dct, :dct!, :idct, :idct!)
         $f{T<:fftwNumber}(x::AbstractArray{T}, dims) = $pf(x, dims) * x
         $pf(x::AbstractArray; kws...) = $pf(x, 1:ndims(x); kws...)
         $f{T<:Real}(x::AbstractArray{T}, dims=1:ndims(x)) = $f(fftwfloat(x), dims)
-        $f{T<:Complex}(x::AbstractArray{T}, dims=1:ndims(x)) = $f(fftwcomplex(x), dims)
+        $pf{T<:Real}(x::AbstractArray{T}, dims; kws...) = $pf(fftwfloat(x), dims; kws...)
+        $pf{T<:Complex}(x::AbstractArray{T}, dims; kws...) = $pf(fftwcomplex(x), dims; kws...)
     end
 end
 

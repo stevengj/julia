@@ -237,6 +237,8 @@ destroy_plan{T<:fftwSingle}(plan::FFTWPlan{T}) =
 function showfftdims(io, sz::Dims, istride::Dims, T)
     if isempty(sz)
         print(io, "0-dimensional")
+    elseif length(sz) == 1
+        print(io, sz[1], "-element")
     else
         print(io, join(sz, "x"))
     end
@@ -529,15 +531,15 @@ for (f,direction) in ((:fft,:FORWARD), (:bfft,:BACKWARD))
     @eval begin
         function $plan_f{T<:fftwComplex}(X::StridedArray{T}, region; 
                                          flags::Integer=ESTIMATE,
-                                         tlim::Real=NO_TIMELIMIT)
+                                         timelimit::Real=NO_TIMELIMIT)
             cFFTWPlan(X, fakesimilar(flags, X, T), region, 
-                      $direction, flags,tlim)
+                      $direction, flags,timelimit)
         end
         
         function $plan_f!{T<:fftwComplex}(X::StridedArray{T}, region;
                                           flags::Integer=ESTIMATE,
-                                          tlim::Real=NO_TIMELIMIT)
-            cFFTWPlan(X, X, region, $direction, flags, tlim)
+                                          timelimit::Real=NO_TIMELIMIT)
+            cFFTWPlan(X, X, region, $direction, flags, timelimit)
         end
     end
 end
@@ -566,14 +568,14 @@ end
 for (Tr,Tc) in ((:Float32,:Complex64),(:Float64,:Complex128))
     @eval begin
         function plan_rfft(X::StridedArray{$Tr}, region;
-                           flags::Integer=ESTIMATE, tlim::Real=NO_TIMELIMIT)
+                           flags::Integer=ESTIMATE, timelimit::Real=NO_TIMELIMIT)
             osize = FFT.rfft_output_size(X, region)
             Y = flags&ESTIMATE ? FakeArray($Tc,osize...) : Array($Tc,osize...)
-            rFFTWPlan(X, Y, region, flags, tlim)
+            rFFTWPlan(X, Y, region, flags, timelimit)
         end
 
         function plan_brfft(X::StridedArray{$Tc}, d::Integer, region;
-                            flags::Integer=ESTIMATE, tlim::Real=NO_TIMELIMIT)
+                            flags::Integer=ESTIMATE, timelimit::Real=NO_TIMELIMIT)
             osize = FFT.brfft_output_size(X, d, region)
             Y = flags&ESTIMATE ? FakeArray($Tc,osize...) : Array($Tc,osize...)
 
@@ -581,10 +583,10 @@ for (Tr,Tc) in ((:Float32,:Complex64),(:Float64,:Complex128))
             # multidimensional out-of-place c2r transforms, so
             # we have to handle 1d and >1d cases separately with a copy.  Ugh.
             if length(region) <= 1
-                rFFTWPlan(X, Y, region, flags | PRESERVE_INPUT, tlim)
+                rFFTWPlan(X, Y, region, flags | PRESERVE_INPUT, timelimit)
             else
                 Xc = copy(X)
-                rFFTWPlan(X, Y, region, flags, tlim)
+                rFFTWPlan(X, Y, region, flags, timelimit)
             end
         end
 
@@ -630,20 +632,22 @@ for f in (:r2r, :r2r!)
         $f{T<:fftwNumber}(x::AbstractArray{T}, kinds, dims) = $pf(x, kinds, dims) * x
         $pf(x::AbstractArray, kinds; kws...) = $pf(x, kinds, 1:ndims(x); kws...)
         $f{T<:Real}(x::AbstractArray{T}, kinds, dims=1:ndims(x)) = $f(fftwfloat(x), kinds, dims)
+        $pf{T<:Real}(x::AbstractArray{T}, kinds, dims; kws...) = $pf(fftwfloat(x), kinds, dims; kws...)
         $f{T<:Complex}(x::AbstractArray{T}, kinds, dims=1:ndims(x)) = $f(fftwcomplex(x), kinds, dims)
+        $pf{T<:Complex}(x::AbstractArray{T}, kinds, dims; kws...) = $pf(fftwcomplex(x), kinds, dims; kws...)
     end
 end
 
 function plan_r2r{T<:fftwNumber}(X::StridedArray{T}, kinds, region;
                                  flags::Integer=ESTIMATE,
-                                 tlim::Real=NO_TIMELIMIT)
-    r2rFFTWPlan(X, fakesimilar(flags, X, T), region, kinds, flags, tlim)
+                                 timelimit::Real=NO_TIMELIMIT)
+    r2rFFTWPlan(X, fakesimilar(flags, X, T), region, kinds, flags, timelimit)
 end
 
 function plan_r2r!{T<:fftwNumber}(X::StridedArray{T}, kinds, region;
                                   flags::Integer=ESTIMATE,
-                                  tlim::Real=NO_TIMELIMIT)
-    r2rFFTWPlan(X, X, region, kinds, flags, tlim)
+                                  timelimit::Real=NO_TIMELIMIT)
+    r2rFFTWPlan(X, X, region, kinds, flags, timelimit)
 end
 
 function A_mul_B!{T}(y::StridedArray{T}, p::r2rFFTWPlan{T}, x::StridedArray{T})

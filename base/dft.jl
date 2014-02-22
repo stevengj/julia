@@ -34,15 +34,19 @@ end
 # promote to a complex floating-point type (out-of-place only),
 # so implementations only need Complex{Float} methods
 for f in (:fft, :bfft, :ifft)
+    pf = symbol(string("plan_", f))
     @eval begin
         $f{T<:Real}(x::AbstractArray{T}, dims=1:ndims(x)) = $f(complexfloat(x), dims)
+        $pf{T<:Real}(x::AbstractArray{T}, dims; kws...) = $pf(complexfloat(x), dims; kws...)
         $f{T<:Union(Integer,Rational)}(x::AbstractArray{Complex{T}}, dims=1:ndims(x)) = $f(complexfloat(x), dims)
+        $pf{T<:Union(Integer,Rational)}(x::AbstractArray{Complex{T}}, dims; kws...) = $pf(complexfloat(x), dims; kws...)
     end
 end
 rfft{T<:Union(Integer,Rational)}(x::AbstractArray{T}, dims=1:ndims(x)) = rfft(float(x), dims)
+plan_rfft{T<:Union(Integer,Rational)}(x::AbstractArray{T}, dims; kws...) = plan_rfft(float(x), dims; kws...)
 
 # only require implementation to provide *(::Plan{T}, ::Array{T})
-*{T}(p::Plan{T}, x::AbstractArray) = p * copy!(Array(x, T, size(x)), x)
+*{T}(p::Plan{T}, x::AbstractArray) = p * copy!(Array(T, size(x)), x)
 
 # Implementations should also implement A_mul_B!(Y, plan, X) so as to support
 # pre-allocated output arrays.  We don't define * in terms of A_mul_B!
