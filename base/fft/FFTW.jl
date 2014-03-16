@@ -2,7 +2,7 @@ module FFTW
 
 import ..DFT: fft, bfft, ifft, rfft, brfft, irfft, plan_fft, plan_bfft, plan_ifft, plan_rfft, plan_brfft, plan_irfft, fft!, bfft!, ifft!, plan_fft!, plan_bfft!, plan_ifft!, Plan, rfft_output_size, brfft_output_size
 
-import Base: show, *, convert, size, strides, ndims, pointer
+import Base: show, *, convert, size, strides, ndims, pointer, A_mul_B!
 
 export r2r, r2r!, plan_r2r, plan_r2r!
 
@@ -41,6 +41,7 @@ const PRESERVE_INPUT  = uint32(1 << 4)   # cancels DESTROY_INPUT
 const PATIENT         = uint32(1 << 5)   # IMPATIENT is default
 const ESTIMATE        = uint32(1 << 6)
 const WISDOM_ONLY     = uint32(1 << 21)
+const NO_SIMD = uint32(1 << 17) # disable SIMD, useful for benchmarking
 
 ## R2R transform kinds
 

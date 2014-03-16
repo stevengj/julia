@@ -1,5 +1,5 @@
 import Base.DFT: Plan
-import Base: plan_fft, plan_bfft, *
+import Base: plan_fft, plan_bfft, *, A_mul_B!
 
 # 1d Cooley-Tukey FFTs, using an FFTW-like (version 2) approach: automatic
 # generation of fixed-size FFT kernels (with and without twiddle factors)
@@ -322,10 +322,12 @@ function applystep{T}(p::CTPlan{T},
     end
 end
 
-function *{T}(p::CTPlan{T}, x::AbstractVector{T}) 
-    y = similar(x)
+function A_mul_B!{T}(y::AbstractVector{T}, p::CTPlan{T}, x::AbstractVector{T}) 
+    length(y) != length(x) && throw(BoundsError())
     applystep(p, x,1,1, y,1,1, 1)
     return y
 end
+
+*{T}(p::CTPlan{T}, x::AbstractVector{T}) = A_mul_B!(similar(x), p, x)
 
 #############################################################################
