@@ -128,7 +128,7 @@ macro nontwiddle(T, forward, n)
                               x0::Integer, xs::Integer, xvs::Integer,
                               Y::AbstractArray{$T},
                               y0::Integer, ys::Integer, yvs::Integer)
-            for i in 0:vn-1
+            @inbounds for i in 0:vn-1
                 $(fftgen(eval(T), forward, n, 
                          j -> :(X[(x0 + xvs*i) + xs*$j]), 
                          k -> :(Y[(y0 + yvs*i) + ys*$k])))
@@ -151,7 +151,7 @@ macro twiddle(T, forward, n)
         function $(esc(name))(vn::Integer, X::AbstractArray{$T}, 
                               x0::Integer, xs::Integer, xvs::Integer,
                               W::AbstractMatrix{$T})
-            for i in 0:vn-1
+            @inbounds for i in 0:vn-1
                 $(fftgen(eval(T), forward, n, 
                          j -> j == 0 ? :(X[(x0 + xvs*i) + xs*$j]) : 
                               :(W[$(j+1),i+1] * X[(x0 + xvs*i) + xs*$j]),
@@ -245,7 +245,7 @@ immutable TwiddleKernelStep{T} <: TwiddleStep{T}
             T[exp((twopi_n*mod(j1*k2,n))*im) for j1=0:r-1, k2=0:m-1])
     end
 end
-function applystep{T}(ts::TwiddleKernelStep, y::AbstractVector{T}, y0, ys)
+function applystep{T}(ts::TwiddleKernelStep{T}, y::AbstractVector{T}, y0, ys)
     ts.kernel(ts.m, y, y0, ts.m * ys, ys, ts.W)
 end
 
@@ -255,7 +255,7 @@ immutable NontwiddleKernelStep{T} <: NontwiddleStep{T}
     NontwiddleKernelStep(n::Int, forward::Bool) =
         new(nontwiddle_kernels[forward, n], n)
 end
-function applystep{T}(ns::NontwiddleKernelStep, r, m,
+function applystep{T}(ns::NontwiddleKernelStep{T}, r,
                       x::AbstractVector{T}, x0, xs,
                       y::AbstractVector{T}, y0, ys)
     ns.kernel(r, x,x0,xs*r,xs, y,y0,ys,ys*ns.n)
@@ -315,7 +315,7 @@ function applystep{T}(p::CTPlan{T},
 end
 
 function A_mul_B!{T}(y::AbstractVector{T}, p::CTPlan{T}, x::AbstractVector{T}) 
-    length(y) != length(x) && throw(BoundsError())
+    p.n == length(y) == length(x) || throw(BoundsError())
     applystep(p, x,1,1, y,1,1, 1)
     return y
 end
@@ -323,10 +323,11 @@ end
 *{T}(p::CTPlan{T}, x::AbstractVector{T}) = A_mul_B!(similar(x), p, x)
 
 #############################################################################
-# Generic solver for prime sizes using Bluestein's algorithm.
-# For a reasonable description of this algorithm, see e.g.
+# Generic solver for arbitrary prime (or nonprime) factors using
+# Bluestein's algorithm.  For a reasonable description of this
+# algorithm (written mostly by SGJ), see e.g.
 #      http://en.wikipedia.org/wiki/Bluestein%27s_FFT_algorithm
-# We follow the a similar notation for the arrays a and b as in that article
+# We follow the same notation for the arrays a and b as in that article.
 
 # compute the b_j = b[j+1] array used in Bluestein's algorithm
 function bluestein_b(T, forward, n, n2)
@@ -363,7 +364,7 @@ immutable NontwiddleBluesteinStep{T} <: NontwiddleStep{T}
         new(n, n2, p, a, A, b, B)
     end
 end
-function applystep{T}(ns::NontwiddleBluesteinStep, r,
+function applystep{T}(ns::NontwiddleBluesteinStep{T}, r,
                       x::AbstractVector{T}, x0, xs,
                       y::AbstractVector{T}, y0, ys)
     a = ns.a
@@ -374,21 +375,21 @@ function applystep{T}(ns::NontwiddleBluesteinStep, r,
     xs_ = xs*r
     ys_ = ys*ns.n
     for i = 1:r
-        for j = 1:ns.n
+        @inbounds for j = 1:ns.n
             a[j] = x[x0 + xs_*(j-1)] * b[j]'
         end
-        for j = ns.n+1:ns.n2
+        @inbounds for j = ns.n+1:ns.n2
             a[j] = z
         end
         # conv(a,b) = ifft(fft(a) .* B), where ifft -> bfft because
         # the 1/n2 scaling was included in b and B, and we use the
         # identity bfft(x) = conj(fft(conj(x))) so that we can re-use ns.p:
         A_mul_B!(A, ns.p, a)
-        for j = 1:ns.n2
+        @inbounds for j = 1:ns.n2
             A[j] = (A[j] * B[j])'
         end
         A_mul_B!(a, ns.p, A)
-        for j = 1:ns.n
+        @inbounds for j = 1:ns.n
             y[y0 + ys*(j-1)] = (b[j] * a[j])'
         end
         x0 += xs
@@ -430,7 +431,7 @@ immutable TwiddleBluesteinStep{T} <: TwiddleStep{T}
             r2, p, a, A, b, B)
     end
 end
-function applystep{T}(ts::TwiddleBluesteinStep, y::AbstractVector{T}, y0, ys)
+function applystep{T}(ts::TwiddleBluesteinStep{T}, y::AbstractVector{T}, y0,ys)
     W = ts.W
     a = ts.a
     b = ts.b
@@ -439,21 +440,21 @@ function applystep{T}(ts::TwiddleBluesteinStep, y::AbstractVector{T}, y0, ys)
     z = zero(T)
     ys_ = ys*ts.m
     for i = 1:ts.m
-        for j = 1:ts.r
+        @inbounds for j = 1:ts.r
             a[j] = W[j,i] * y[y0 + ys_*(j-1)] * b[j]'
         end
-        for j = ts.r+1:ts.r2
+        @inbounds for j = ts.r+1:ts.r2
             a[j] = z
         end
         # conv(a,b) = ifft(fft(a) .* B), where ifft -> bfft because
         # the 1/n2 scaling was included in b and B, and we use the
         # identity bfft(x) = conj(fft(conj(x))) so that we can re-use ts.p:
         A_mul_B!(A, ts.p, a)
-        for j = 1:ts.r2
+        @inbounds for j = 1:ts.r2
             A[j] = (A[j] * B[j])'
         end
         A_mul_B!(a, ts.p, A)
-        for j = 1:ts.r
+        @inbounds for j = 1:ts.r
             y[y0 + ys_*(j-1)] = (b[j] * a[j])'
         end
         y0 += ys
