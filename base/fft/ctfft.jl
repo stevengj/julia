@@ -1,5 +1,5 @@
 import Base.DFT: Plan
-import Base: plan_fft, plan_bfft, *, A_mul_B!, show, summary
+import Base: plan_fft, plan_bfft, *, A_mul_B!, show, summary, size
 
 import Base.real
 real{T<:Real}(::Type{T}) = T
@@ -276,6 +276,8 @@ function show(io::IO, p::CTPlan)
           join(map(string, p.tsteps), ", "), "\n    base case: ", p.nstep)
 end
 
+size(p::CTPlan) = (p.n, p.n)
+
 # steps for pregenerated kernels: 
 immutable TwiddleKernelStep{T} <: TwiddleStep{T}
     r::Int # radix
@@ -290,7 +292,7 @@ immutable TwiddleKernelStep{T} <: TwiddleStep{T}
             T[exp((twopi_n*mod(j1*k2,n))*im) for j1=0:r-1, k2=0:m-1])
     end
 end
-function applystep{T}(ts::TwiddleKernelStep{T}, y::AbstractVector{T}, y0, ys)
+function applystep{T}(ts::TwiddleKernelStep{T}, y::AbstractArray{T}, y0, ys)
     ts.kernel(ts.m, y, y0, ts.m * ys, ys, ts.W)
 end
 show(io::IO, ts::TwiddleKernelStep) = print(io, "radix ", ts.r)
@@ -302,8 +304,8 @@ immutable NontwiddleKernelStep{T} <: NontwiddleStep{T}
         new(nontwiddle_kernels[forward, n], n)
 end
 function applystep{T}(ns::NontwiddleKernelStep{T}, r,
-                      x::AbstractVector{T}, x0, xs,
-                      y::AbstractVector{T}, y0, ys)
+                      x::AbstractArray{T}, x0, xs,
+                      y::AbstractArray{T}, y0, ys)
     ns.kernel(r, x,x0,xs*r,xs, y,y0,ys,ys*ns.n)
 end
 show(io::IO, ns::NontwiddleKernelStep) = print(io, "size ", ns.n, " kernel")
@@ -321,18 +323,14 @@ function CTPlan{Tr<:FloatingPoint}(::Type{Complex{Tr}}, forward::Bool, n::Int)
     CTPlan{T,forward}(n, tsteps, Nontwiddle(T, m, forward))
 end
 
-function plan_fft{Tr<:FloatingPoint}(x::AbstractVector{Complex{Tr}}, dims)
-    collect(dims) != [1] && throw(ArgumentError("invalid fft dims"))
+plan_fft{Tr<:FloatingPoint}(x::AbstractVector{Complex{Tr}}) =
     CTPlan(Complex{Tr}, true, length(x))
-end
-function plan_bfft{Tr<:FloatingPoint}(x::AbstractVector{Complex{Tr}}, dims)
-    collect(dims) != [1] && throw(ArgumentError("invalid fft dims"))
+plan_bfft{Tr<:FloatingPoint}(x::AbstractVector{Complex{Tr}}) =
     CTPlan(Complex{Tr}, false, length(x))
-end
 
 function applystep{T}(p::CTPlan{T}, 
-                      x::AbstractVector{T}, x0, xs,
-                      y::AbstractVector{T}, y0, ys,
+                      x::AbstractArray{T}, x0, xs,
+                      y::AbstractArray{T}, y0, ys,
                       step::Int)
     nsteps = length(p.tsteps)
     if step > nsteps
@@ -415,8 +413,8 @@ show(io::IO, s::NontwiddleBluesteinStep) =
     print(io, "size ", s.n, "Bluestein-", s.n2)
 
 function applystep{T}(ns::NontwiddleBluesteinStep{T}, r,
-                      x::AbstractVector{T}, x0, xs,
-                      y::AbstractVector{T}, y0, ys)
+                      x::AbstractArray{T}, x0, xs,
+                      y::AbstractArray{T}, y0, ys)
     a = ns.a
     b = ns.b
     A = ns.A
@@ -482,7 +480,7 @@ end
 show(io::IO, s::TwiddleBluesteinStep) = 
     print(io, "radix ", s.r, "Bluestein-", s.r2)
 
-function applystep{T}(ts::TwiddleBluesteinStep{T}, y::AbstractVector{T}, y0,ys)
+function applystep{T}(ts::TwiddleBluesteinStep{T}, y::AbstractArray{T}, y0,ys)
     W = ts.W
     a = ts.a
     b = ts.b
