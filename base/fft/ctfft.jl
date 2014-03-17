@@ -240,9 +240,9 @@ immutable TwiddleKernelStep{T} <: TwiddleStep{T}
     W::Array{T}
     function TwiddleKernelStep(n::Int, r::Int, forward::Bool)
         m = div(n, r)
-        twopi = forward ? -2π : 2π
+        twopi_n = forward ? -2π/n : 2π/n
         new(r, m, twiddle_kernels[forward, r],
-            T[exp((twopi*mod(j1*k2,n)/n)*im) for j1=0:r-1, k2=0:m-1])
+            T[exp((twopi_n*mod(j1*k2,n))*im) for j1=0:r-1, k2=0:m-1])
     end
 end
 function applystep{T}(ts::TwiddleKernelStep, y::AbstractVector{T}, y0, ys)
@@ -251,13 +251,14 @@ end
 
 immutable NontwiddleKernelStep{T} <: NontwiddleStep{T}
     kernel::Function
+    n::Int
     NontwiddleKernelStep(n::Int, forward::Bool) =
-        new(nontwiddle_kernels[forward, n])
+        new(nontwiddle_kernels[forward, n], n)
 end
 function applystep{T}(ns::NontwiddleKernelStep, r, m,
                       x::AbstractVector{T}, x0, xs,
                       y::AbstractVector{T}, y0, ys)
-    ns.kernel(r, x,x0,xs*r,xs, y,y0,ys,ys*m)
+    ns.kernel(r, x,x0,xs*r,xs, y,y0,ys,ys*ns.n)
 end
 
 typealias CTComplex Union(Complex64,Complex128)
@@ -275,12 +276,7 @@ function CTPlan{T<:CTComplex}(::Type{T}, forward::Bool, n::Int)
         m = tsteps[i].m
     end
     @assert m == factors[end]
-    if m in fft_kernel_sizes
-        nstep = NontwiddleKernelStep{T}(m, forward)
-    else
-        error("generic base case not implemented yet")
-    end
-    CTPlan{T,forward}(n, tsteps, nstep)
+    CTPlan{T,forward}(n, tsteps, Nontwiddle(T, m, forward))
 end
 
 function plan_fft{T<:CTComplex}(x::AbstractVector{T}, dims)
@@ -298,14 +294,14 @@ function applystep{T}(p::CTPlan{T},
                       step::Int)
     nsteps = length(p.tsteps)
     if step > nsteps
-        applystep(p.nstep, 1,p.n, x,x0,xs, y,y0,ys)
+        applystep(p.nstep, 1, x,x0,xs, y,y0,ys)
     else
         # decimation in time: perform r DFTs of length m
         tstep = p.tsteps[step]
         m = tstep.m
         r = tstep.r
         if step == nsteps
-            applystep(p.nstep, r,m, x,x0,xs, y,y0,ys)
+            applystep(p.nstep, r, x,x0,xs, y,y0,ys)
         else
             xs_ = xs*r
             x0_ = x0
@@ -331,3 +327,78 @@ end
 *{T}(p::CTPlan{T}, x::AbstractVector{T}) = A_mul_B!(similar(x), p, x)
 
 #############################################################################
+# Generic solver for prime sizes using Bluestein's algorithm.
+# For a reasonable description of this algorithm, see e.g.
+#      http://en.wikipedia.org/wiki/Bluestein%27s_FFT_algorithm
+# We follow the a similar notation for the arrays a and b as in that article
+
+# compute the b_j = b[j+1] array used in Bluestein's algorithm
+function bluestein_b(T, forward, n, n2)
+    b = zeros(T, n2)
+    Tr = promote_type(Float64, typeof(real(zero(T))))
+    pi_n = forward ? π/convert(Tr,n) : -π/convert(Tr,n)
+    # embed inverse-DFT scaling factor 1/n2 in b array:
+    scale = inv(cbrt(convert(Tr,n2)))
+    b[1] = scale
+    for i = 1:n-1
+        b[i+1] = b[n2-i+1] = exp((pi_n * mod(i*i,2n))*im) * scale
+    end
+    return b
+end
+
+immutable NontwiddleBluesteinStep{T} <: NontwiddleStep{T}
+    n::Int   # DFT size to be computed
+    n2::Int  # nextpow2(2n-1)
+    p::Plan{T}  # plan for DFT of length n2
+
+    # the following arrays are of length n2, used to compute the convolution
+    a::Vector{T} # storage for x[j] * b[j]', zero-padded
+    A::Vector{T} # storage to be used for DFT of a
+    b::Vector{T} # b[j+1] = exp(πi j^2 / n), wrapped symmetrically
+    B::Vector{T} # DFT(b)
+
+    function NontwiddleBluesteinStep(n::Int, forward::Bool)
+        n2 = nextpow2(2n-1)
+        a = Array(T, n2)
+        p = plan_fft(a)
+        A = Array(T, n2)
+        b = bluestein_b(T, forward, n, n2)
+        B = p * b
+        new(n, n2, p, a, A, b, B)
+    end
+end
+function applystep{T}(ns::NontwiddleBluesteinStep, r,
+                      x::AbstractVector{T}, x0, xs,
+                      y::AbstractVector{T}, y0, ys)
+    a = ns.a
+    b = ns.b
+    A = ns.A
+    B = ns.B
+    z = zero(T)
+    xs_ = xs*r
+    ys_ = ys*ns.n
+    for i = 1:r
+        for j = 1:ns.n
+            a[j] = x[x0 + xs_*(j-1)] * b[j]'
+        end
+        for j = ns.n+1:ns.n2
+            a[j] = z
+        end
+        # conv(a,b) = ifft(fft(a) .* B), where ifft -> bfft because
+        # the 1/n2 scaling was included in b and B, and we use the
+        # identity bfft(x) = conj(fft(conj(x))) so that we can re-use ns.p:
+        A_mul_B!(A, ns.p, a)
+        for j = 1:ns.n2
+            A[j] = (A[j] * B[j])'
+        end
+        A_mul_B!(a, ns.p, A)
+        for j = 1:ns.n
+            y[y0 + ys*(j-1)] = (b[j] * a[j])'
+        end
+        x0 += xs
+        y0 += ys_
+    end
+end
+
+Nontwiddle(T, n::Int, forw::Bool) = n in fft_kernel_sizes ? 
+    NontwiddleKernelStep{T}(n, forw) : NontwiddleBluesteinStep{T}(n, forw)
