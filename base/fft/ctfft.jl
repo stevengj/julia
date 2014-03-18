@@ -185,6 +185,8 @@ end
 const fft_kernel_sizes_sorted = sort!(Int[n for n in fft_kernel_sizes],
                                       rev=true)
 
+typealias CTComplex Union(Complex64,Complex128) # types of pregenerated kernels
+
 # The above kernels are only for single- and double-precision, since they
 # include hard-coded transcendental constants.  The following kernels
 # are generic to any floating-point type.  
@@ -203,9 +205,9 @@ for forward in (true,false)
     twiddle_kernels[forward,4] = eval(twiddle_name(forward,4))
 end
 
-Nontwiddle(T, n::Int, forw::Bool) = n in fft_kernel_sizes || n in generic_kernel_sizes ? NontwiddleKernelStep{T}(n, forw) : NontwiddleBluesteinStep{T}(n, forw)
+Nontwiddle(T, n::Int, forw::Bool) = (T <: CTComplex && n in fft_kernel_sizes) || n in generic_kernel_sizes ? NontwiddleKernelStep{T}(n, forw) : NontwiddleBluesteinStep{T}(n, forw)
 
-Twiddle(T, n::Int, r::Int, forw::Bool) = r in fft_kernel_sizes || r == 4 ? TwiddleKernelStep{T}(n, r, forw) : TwiddleBluesteinStep{T}(n, r, forw)
+Twiddle(T, n::Int, r::Int, forw::Bool) = (T <: CTComplex && r in fft_kernel_sizes) || r == 4 ? TwiddleKernelStep{T}(n, r, forw) : TwiddleBluesteinStep{T}(n, r, forw)
 
 #############################################################################
 # Combining pregenerated kernels into generic-size FFT plans:
@@ -218,7 +220,7 @@ function fft_factors(T::Type, n::Integer)
         push!(factors, 1)
     else
         m = n
-        if T <: Union(Complex64,Complex128)
+        if T <: CTComplex
             for r in fft_kernel_sizes_sorted
                 while m % r == 0
                     push!(factors, r)
