@@ -6,6 +6,7 @@ immutable MultiDimPlan{T,forward} <: Plan{T}
     p::Vector{CTPlan{T,forward}} # 1d plans along each transformed dimension,
                                  # with p.n == 0 for untransformed dims.
     w::Vector{T} # workspace (for in-place 1d transforms)
+    lastdim::Int # last transformed dimension
 end
 
 # create null plans for untransformed dimensions
@@ -14,9 +15,9 @@ CTPlan(T,forward) = CTPlan{T,forward}(0, Array(TwiddleStep{T},0),
                                       NullNontwiddleStep{T}())
 
 summary{T,forw}(p::MultiDimPlan{T,forw}) =
-    string(forw ? "forward" : "backward", length(p.p),
+    string(forw ? "forward " : "backward ", length(p.p),
            "-dimensional MultiDimPlan{$T} of size ",
-           join(map(p -> p.n == 0 ? "_" : string(p.n), p.p), "x"))
+           join(map(P -> P.n == 0 ? "_" : string(P.n), p.p), "x"))
 
 function show(io::IO, p::MultiDimPlan)
     print(io, summary(p), ", via:\n",
@@ -37,8 +38,11 @@ function MultiDimPlan{T<:Complex}(::Type{T}, forward::Bool, dims, sz)
         p[d] = CTPlan(T, forward, sz[d])
         i = d
     end
+    for j = i+1:N
+        p[j] = CTPlan(T,forward) # non-transformed dimensions
+    end
     w = Array(T, length(sdims) <= 1 ? 0 : maximum(sz[sdims[1:end-1]]))
-    MultiDimPlan{T,forward}(p, w)
+    MultiDimPlan{T,forward}(p, w, i)
 end
 
 plan_fft{Tr<:FloatingPoint}(x::AbstractArray{Complex{Tr}}, dims) =
@@ -50,9 +54,11 @@ plan_bfft{Tr<:FloatingPoint}(x::AbstractArray{Complex{Tr}}, dims) =
 # strided arrays (so that we can use linear indexing):
 function applydims{T}(p::MultiDimPlan{T}, d,
                       x::StridedArray{T}, x0, y::StridedArray{T}, y0)
-    if d == ndims(y)
-        if p.p[d].n != 0
+    if d == p.lastdim
+        if d == ndims(x)
             applystep(p.p[d], x,x0,stride(x,d), y,y0,stride(y,d), 1)
+        else
+            applydim(p, d, d+1, x,x0, y,y0)
         end
     else
         sx = stride(x,d)
@@ -64,7 +70,7 @@ function applydims{T}(p::MultiDimPlan{T}, d,
             y0 += sy
         end
         if p.p[d].n != 0
-            applydim(p, d, d+1, y::StridedArray{T}, y0_)
+            applydim(p, d, d+1, y,y0_)
         end
     end
 end
@@ -92,6 +98,29 @@ function applydim{T}(p::MultiDimPlan{T}, d, k, y::StridedArray{T}, y0)
         end
     end
 end
+# as above, but out-of-place
+function applydim{T}(p::MultiDimPlan{T}, d, k,
+                     x::StridedArray{T}, x0,
+                     y::StridedArray{T}, y0)
+    sx_k = stride(x,k)
+    sy_k = stride(y,k)
+    if k == ndims(y)
+        P = p.p[d]
+        sx = stride(x,d)
+        sy = stride(y,d)
+        for i = 1:size(y,k)
+            applystep(P, x,x0,sx, y,y0,sy, 1)
+            x0 += sx_k
+            y0 += sy_k
+        end
+    else
+        for i = 1:size(y,k)
+            applydim(p, d, k+1, x,x0, y,y0)
+            x0 += sx_k
+            y0 += sy_k
+        end
+    end
+end
 
 function A_mul_B!{T}(y::StridedArray{T},
                      p::MultiDimPlan{T}, x::StridedArray{T}) 
@@ -101,10 +130,10 @@ function A_mul_B!{T}(y::StridedArray{T},
         P = p.p[i]
         P.n == 0 || (P.n == size(x,i) == size(y,i)) || throw(BoundsError())
     end
-    if N > 0
+    if N > 0 && p.lastdim > 0
         applydims(p, 1, x,1, y,1)
     else
-        y[1] = x[1]
+        copy!(y, x)
     end
     return y
 end

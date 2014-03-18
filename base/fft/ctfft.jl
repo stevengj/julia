@@ -272,8 +272,13 @@ end
 summary{T,forw}(p::CTPlan{T,forw}) = string(forw ? "for" : "back", 
                                             "ward CTPlan{$T} of size ", p.n)
 function show(io::IO, p::CTPlan)
-    print(io, summary(p), ":\n    ", length(p.tsteps), " Cooley-Tukey steps: ",
-          join(map(string, p.tsteps), ", "), "\n    base case: ", p.nstep)
+    if p.n == 0
+        print(io, "(no transform)") # untransformed dims in multi-dim plans
+    else
+        print(io, summary(p), ":\n    ", length(p.tsteps),
+              " Cooley-Tukey steps: ",
+              join(map(string, p.tsteps), ", "), "\n    base case: ", p.nstep)
+    end
 end
 
 size(p::CTPlan) = (p.n, p.n)
