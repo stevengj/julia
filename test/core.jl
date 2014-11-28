@@ -1962,3 +1962,8 @@ function f9134()
     end
 end
 @test_throws UndefVarError f9134()
+
+# issue #9147
+for n = 1:1000
+    @test all(Array(Int, n) .== 0)
+end

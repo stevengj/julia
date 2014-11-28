@@ -111,27 +111,29 @@ static size_t total_freed_bytes=0;
 // malloc wrappers, aligned allocation
 
 #ifdef _P64
-#define malloc_a16(sz) malloc(((sz)+15)&-16)
+#define calloc_a16(sz) calloc(1,((sz)+15)&-16)
 #define free_a16(p) free(p)
 
-#elif defined(_OS_WINDOWS_) /* 32-bit OS is implicit here. */
-#define malloc_a16(sz) _aligned_malloc(sz?((sz)+15)&-16:1, 16)
-#define free_a16(p) _aligned_free(p)
-
 #elif defined(__APPLE__)
-#define malloc_a16(sz) malloc(((sz)+15)&-16)
+#define calloc_a16(sz) calloc(1,((sz)+15)&-16)
 #define free_a16(p) free(p)
 
 #else
-static inline void *malloc_a16(size_t sz)
+static inline void *calloc_a16(size_t n)
 {
-    void *ptr;
-    if (posix_memalign(&ptr, 16, (sz+15)&-16))
-        return NULL;
-    return ptr;
+	 void *p0, *p;
+	 if (!(p0 = calloc(1, n + 16))) return (void *) 0;
+	 p = (void *) (((uintptr_t) p0 + 16) & (~((uintptr_t) (16 - 1))));
+	 *((void **) p - 1) = p0;
+	 return p;
 }
-#define free_a16(p) free(p)
-
+static inline void *realloc_a16(void *p, size_t n)
+{
+}
+static inline void free_a16(void *p)
+{
+	 if (p) free(*((void **) p - 1));
+}
 #endif
 
 DLLEXPORT void *jl_gc_counted_malloc(size_t sz)
@@ -168,7 +170,7 @@ void *jl_gc_managed_malloc(size_t sz)
     if (allocd_bytes > collect_interval)
         jl_gc_collect();
     sz = (sz+15) & -16;
-    void *b = malloc_a16(sz);
+    void *b = calloc_a16(sz);
     if (b == NULL)
         jl_throw(jl_memory_exception);
     allocd_bytes += sz;
@@ -183,16 +185,11 @@ void *jl_gc_managed_realloc(void *d, size_t sz, size_t oldsz, int isaligned)
     void *b;
 #ifdef _P64
     b = realloc(d, sz);
-#elif defined(_OS_WINDOWS_)
-    if (isaligned)
-        b = _aligned_realloc(d, sz, 16);
-    else
-        b = realloc(d, sz);
 #elif defined(__APPLE__)
     b = realloc(d, sz);
 #else
     // TODO better aligned realloc here
-    b = malloc_a16(sz);
+    b = calloc_a16(sz);
     if (b != NULL) {
         memcpy(b, d, oldsz);
         if (isaligned) free_a16(d); else free(d);
@@ -348,7 +345,7 @@ static void *alloc_big(size_t sz)
     if (sz+offs+15 < offs+15)  // overflow in adding offs, size was "negative"
         jl_throw(jl_memory_exception);
     size_t allocsz = (sz+offs+15) & -16;
-    bigval_t *v = (bigval_t*)malloc_a16(allocsz);
+    bigval_t *v = (bigval_t*)calloc_a16(allocsz);
     allocd_bytes += allocsz;
     if (v == NULL)
         jl_throw(jl_memory_exception);
@@ -462,7 +459,7 @@ static void add_page(pool_t *p)
     gcpage_t *pg = (gcpage_t*)mmap(NULL, sizeof(gcpage_t), PROT_READ|PROT_WRITE,
                                    MAP_ANONYMOUS|MAP_PRIVATE, -1, 0);
 #else
-    gcpage_t *pg = (gcpage_t*)malloc_a16(sizeof(gcpage_t));
+    gcpage_t *pg = (gcpage_t*)calloc_a16(sizeof(gcpage_t));
 #endif
     if (pg == NULL)
         jl_throw(jl_memory_exception);

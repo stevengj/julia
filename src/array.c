@@ -81,7 +81,7 @@ static jl_array_t *_new_array_(jl_value_t *atype, uint32_t ndims, size_t *dims,
         a->type = atype;
         a->how = 0;
         data = (char*)a + doffs;
-        if (tot > 0 && !isunboxed) {
+        if (tot > 0) {
             memset(data, 0, tot);
         }
     }
@@ -95,8 +95,6 @@ static jl_array_t *_new_array_(jl_value_t *atype, uint32_t ndims, size_t *dims,
         a->how = 2;
         data = jl_gc_managed_malloc(tot);
         jl_gc_track_malloced_array(a);
-        if (!isunboxed)
-            memset(data, 0, tot);
         JL_GC_POP();
     }
 
