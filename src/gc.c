@@ -349,11 +349,8 @@ static void *alloc_big(size_t sz)
     allocd_bytes += allocsz;
     if (v == NULL)
         jl_throw(jl_memory_exception);
-#ifdef MEMDEBUG
-    //memset(v, 0xee, allocsz);
-#endif
     v->sz = sz;
-    v->flags = 0;
+    /* already zero via calloc: v->flags = 0; */
     v->next = big_objects;
     big_objects = v;
     return &v->_data[0];
@@ -491,7 +488,8 @@ static inline void *pool_alloc(pool_t *p)
     assert(p->freelist != NULL);
     gcval_t *v = p->freelist;
     p->freelist = p->freelist->next;
-    v->flags = 0;
+    assert(p->osize >= sizeof(v->flags)); /* memset should zero v->flags too */
+    memset((void*) v, 0, p->osize);
     return v;
 }
 

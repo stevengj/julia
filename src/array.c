@@ -81,9 +81,6 @@ static jl_array_t *_new_array_(jl_value_t *atype, uint32_t ndims, size_t *dims,
         a->type = atype;
         a->how = 0;
         data = (char*)a + doffs;
-        if (tot > 0) {
-            memset(data, 0, tot);
-        }
     }
     else {
         tsz = (tsz+15)&-16; // align whole object size 16
