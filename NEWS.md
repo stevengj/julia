@@ -7,7 +7,8 @@ New language features
   * Generator expressions, e.g. `f(i) for i in 1:n` ([#4470]). This returns an iterator
     that computes the specified values on demand.
 
-  * Broadcasting syntax: ``f.(args...)`` is equivalent to ``broadcast(f, args...)`` ([#15032]).
+  * Broadcasting syntax: ``f.(args...)`` is equivalent to ``broadcast(f, args...)`` ([#15032]),
+    and nested `f.(g.(args...))` calls are fused into a single `broadcast` loop ([#17300]).
 
   * Macro expander functions are now generic, so macros can have multiple definitions
     (e.g. for different numbers of arguments, or optional arguments) ([#8846], [#9627]).
@@ -297,3 +298,4 @@ Deprecated or removed
 [#16731]: https://github.com/JuliaLang/julia/issues/16731
 [#16972]: https://github.com/JuliaLang/julia/issues/16972
 [#17266]: https://github.com/JuliaLang/julia/issues/17266
+[#17300]: https://github.com/JuliaLang/julia/issues/17300
