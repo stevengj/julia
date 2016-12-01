@@ -55,6 +55,7 @@ This section lists changes that do not have deprecation warnings.
 
   * `broadcast` now treats `Ref` (except for `Ptr`) arguments as 0-dimensional
     arrays ([#18965]).
+
   * `broadcast` now handles missing data (`Nullable`s) allowing operations to
     be lifted over `Nullable`s, as if the `Nullable` were like an array with
     zero or one element. ([#16961]). Note that many situations where `Nullable`
@@ -75,6 +76,12 @@ This section lists changes that do not have deprecation warnings.
     without waiting for worker exits.
 
   * `quadgk` has been moved from Base into a separate package. ([#19741])
+
+  * Fullwidth and halfwidth characters are now considered equivalent in
+    identifiers and code, and certain Greek-like Unicode characters
+    (µ "micro" and ɛ "latin epsilon") are considered equivalent to
+    the corresponding Greek characters, for ease of input.  `\varepsilon`
+    now tab-completes to U+03B5 (greek small letter epsilon).  ([#19464])
 
 Library improvements
 --------------------
