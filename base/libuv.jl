@@ -4,6 +4,19 @@
 
 include(string(length(Core.ARGS) >= 2 ? Core.ARGS[2] : "", "uv_constants.jl"))  # include($BUILDROOT/base/uv_constants.jl)
 
+# convert libuv error codes to errno codes
+# (on unix, this should be equivalent to -errnum, but on Windows it is a nontrivial mapping)
+const _uv_err_to_errno = Dict{Cint,Cint}()
+if isdefined(@__MODULE__, :uv_err_vals)
+    for (uvsym,n) in uv_err_vals
+        csym = Symbol(string(uvsym)[4:end])
+        if isdefined(Libc, csym)
+            _uv_err_to_errno[n] = Core.eval(Libc, csym)
+        end
+    end
+end
+uv_err_to_errno(errnum::Integer) = get(_uv_err_to_errno, errnum, Cint(0))
+
 # convert UV handle data to julia object, checking for null
 function uv_sizeof_handle(handle)
     if !(UV_UNKNOWN_HANDLE < handle < UV_HANDLE_TYPE_MAX)

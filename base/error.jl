@@ -145,7 +145,14 @@ end
 Like [`systemerror`](@ref), but for Windows API functions that use [`GetLastError`](@ref) instead
 of setting [`errno`](@ref).
 """
-windowserror(p, b::Bool; extrainfo=nothing) = b ? throw(Main.Base.SystemError(string(p), Libc.errno(), WindowsErrorInfo(Libc.GetLastError(), extrainfo))) : nothing
+function windowserror(p, b::Bool; extrainfo=nothing)
+    if b
+        win_errnum = Libc.GetLastError()
+        c_errnum = uv_err_to_errno(ccall(:uv_translate_sys_error, Cint, (Cint,), win_errnum))
+        throw(Main.Base.SystemError(string(p), c_errnum, WindowsErrorInfo(win_errnum, extrainfo)))
+    end
+    return nothing
+end
 
 
 ## assertion macro ##
